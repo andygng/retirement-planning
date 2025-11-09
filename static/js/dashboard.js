@@ -1,5 +1,10 @@
 let planData = null;
 let charts = {};
+const CHAT_STORAGE_KEY = 'retirementChatHistory';
+let chatHistory = [];
+let chatInitialized = false;
+let chatIsSending = false;
+const chatElements = {};
 
 // Load plan data from sessionStorage
 document.addEventListener('DOMContentLoaded', () => {
@@ -7,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (storedData) {
         planData = JSON.parse(storedData);
         renderDashboard();
+        initializeChatAssistant();
     } else {
         // No data, redirect to welcome page
         window.location.href = '/';
@@ -426,6 +432,9 @@ function saveAndRecalculate() {
         planData = result;
         sessionStorage.setItem('retirementPlan', JSON.stringify(result));
         renderDashboard();
+        if (chatInitialized) {
+            setChatStatus('Plan updated. Ask what changed.');
+        }
     })
     .catch(error => {
         console.error('Error:', error);
@@ -452,3 +461,249 @@ function formatCurrencyShort(amount) {
     return '$' + amount.toFixed(0);
 }
 
+function initializeChatAssistant() {
+    if (chatInitialized) {
+        return;
+    }
+    
+    chatElements.launcherInput = document.getElementById('chatLauncherInput');
+    chatElements.overlay = document.getElementById('chatOverlay');
+    chatElements.closeBtn = document.getElementById('closeChat');
+    chatElements.messages = document.getElementById('chatMessages');
+    chatElements.form = document.getElementById('chatForm');
+    chatElements.textarea = document.getElementById('chatInput');
+    chatElements.status = document.getElementById('chatStatus');
+    chatElements.sendBtn = document.getElementById('sendChatBtn');
+    
+    if (!chatElements.launcherInput || !chatElements.form || !chatElements.overlay) {
+        return;
+    }
+    
+    chatHistory = loadChatHistory();
+    renderChatMessages();
+    
+    chatElements.launcherInput.addEventListener('click', openChatOverlay);
+    chatElements.launcherInput.addEventListener('focus', openChatOverlay);
+    
+    if (chatElements.closeBtn) {
+        chatElements.closeBtn.addEventListener('click', closeChatOverlay);
+    }
+    
+    chatElements.overlay.addEventListener('click', (event) => {
+        if (event.target === chatElements.overlay) {
+            closeChatOverlay();
+        }
+    });
+    chatElements.form.addEventListener('submit', handleChatSubmit);
+    
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && chatElements.overlay && chatElements.overlay.classList.contains('active')) {
+            closeChatOverlay();
+        }
+    });
+    
+    chatInitialized = true;
+}
+
+function loadChatHistory() {
+    try {
+        const stored = localStorage.getItem(CHAT_STORAGE_KEY);
+        return stored ? JSON.parse(stored) : [];
+    } catch (error) {
+        console.warn('Unable to load chat history', error);
+        return [];
+    }
+}
+
+function saveChatHistory() {
+    try {
+        localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(chatHistory));
+    } catch (error) {
+        console.warn('Unable to save chat history', error);
+    }
+}
+
+function renderChatMessages() {
+    if (!chatElements.messages) {
+        return;
+    }
+    
+    if (!chatHistory.length) {
+        const intro = "I'm your plan copilot. Ask how changing retirement age, savings, or income targets affects your outlook.";
+        chatElements.messages.innerHTML = `
+            <div class="chat-message assistant">
+                ${formatChatMessage(intro)}
+            </div>
+        `;
+        return;
+    }
+    
+    chatElements.messages.innerHTML = chatHistory
+        .map(message => `
+            <div class="chat-message ${message.role}">
+                ${formatChatMessage(message.content)}
+            </div>
+        `)
+        .join('');
+    
+    chatElements.messages.scrollTop = chatElements.messages.scrollHeight;
+}
+
+function addChatMessage(role, content) {
+    chatHistory.push({
+        role,
+        content,
+        timestamp: Date.now()
+    });
+    saveChatHistory();
+    renderChatMessages();
+}
+
+function handleChatSubmit(event) {
+    event.preventDefault();
+    if (chatIsSending) {
+        return;
+    }
+    
+    const message = chatElements.textarea.value.trim();
+    if (!message) {
+        return;
+    }
+    
+    addChatMessage('user', message);
+    chatElements.textarea.value = '';
+    setChatStatus('Thinking...');
+    chatIsSending = true;
+    if (chatElements.sendBtn) {
+        chatElements.sendBtn.disabled = true;
+    }
+    
+    fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            message,
+            plan_data: planData
+        })
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.response) {
+            addChatMessage('assistant', result.response);
+            setChatStatus('');
+        } else {
+            const errorMessage = result.error || 'Something went wrong.';
+            addChatMessage('error', errorMessage);
+            setChatStatus('Unable to get a reply.');
+        }
+    })
+    .catch(() => {
+        addChatMessage('error', 'Network error. Please try again.');
+        setChatStatus('Unable to get a reply.');
+    })
+    .finally(() => {
+        chatIsSending = false;
+        if (chatElements.sendBtn) {
+            chatElements.sendBtn.disabled = false;
+        }
+    });
+}
+
+function openChatOverlay() {
+    if (!chatElements.overlay) {
+        return;
+    }
+    chatElements.overlay.classList.add('active');
+    chatElements.overlay.setAttribute('aria-hidden', 'false');
+    setTimeout(() => {
+        chatElements.textarea.focus();
+    }, 0);
+}
+
+function closeChatOverlay() {
+    if (!chatElements.overlay) {
+        return;
+    }
+    chatElements.overlay.classList.remove('active');
+    chatElements.overlay.setAttribute('aria-hidden', 'true');
+    if (chatElements.launcherInput) {
+        chatElements.launcherInput.blur();
+    }
+}
+
+function setChatStatus(text) {
+    if (chatElements.status) {
+        chatElements.status.textContent = text;
+    }
+}
+
+function formatChatMessage(content) {
+    const lines = content.split(/\r?\n/);
+    let html = '';
+    let inList = false;
+    
+    lines.forEach(rawLine => {
+        const line = rawLine.trim();
+        if (!line) {
+            if (inList) {
+                html += '</ul>';
+                inList = false;
+            }
+            return;
+        }
+        
+        if (/^[-*]\s+/.test(line)) {
+            if (!inList) {
+                html += '<ul>';
+                inList = true;
+            }
+            const text = line.replace(/^[-*]\s+/, '');
+            html += `<li>${applyInlineFormatting(text)}</li>`;
+            return;
+        }
+        
+        if (inList) {
+            html += '</ul>';
+            inList = false;
+        }
+        
+        if (/^###\s+/.test(line)) {
+            html += `<h4>${applyInlineFormatting(line.replace(/^###\s+/, ''))}</h4>`;
+        } else if (/^##\s+/.test(line)) {
+            html += `<h3>${applyInlineFormatting(line.replace(/^##\s+/, ''))}</h3>`;
+        } else if (/^#\s+/.test(line)) {
+            html += `<h2>${applyInlineFormatting(line.replace(/^#\s+/, ''))}</h2>`;
+        } else {
+            html += `<p>${applyInlineFormatting(line)}</p>`;
+        }
+    });
+    
+    if (inList) {
+        html += '</ul>';
+    }
+    
+    return html;
+}
+
+function applyInlineFormatting(text) {
+    let escaped = escapeHtml(text);
+    escaped = escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    escaped = escaped.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    return escaped;
+}
+
+function escapeHtml(str) {
+    if (str == null) {
+        return '';
+    }
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    };
+    return String(str).replace(/[&<>"']/g, char => map[char]);
+}

@@ -1,8 +1,21 @@
+import json
+import os
+
 from flask import Flask, render_template, request, jsonify
+from openai import OpenAI
 from calculations import calculate_retirement_plan
 from models import validate_inputs, RetirementInputs
 
 app = Flask(__name__)
+
+def get_openai_client():
+    """Create an OpenAI client if the API key is configured."""
+    api_key = os.environ.get('OPENAI_API_KEY')
+    if not api_key:
+        raise RuntimeError(
+            'OpenAI API key is not configured. Set the OPENAI_API_KEY environment variable.'
+        )
+    return OpenAI(api_key=api_key)
 
 @app.route('/')
 def index():
@@ -41,6 +54,45 @@ def calculate():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/chat', methods=['POST'])
+def chat():
+    """Use OpenAI to answer plan-related questions."""
+    data = request.json or {}
+    message = (data.get('message') or '').strip()
+    plan_data = data.get('plan_data') or {}
+    
+    if not message:
+        return jsonify({'error': 'A message is required.'}), 400
+    
+    try:
+        client = get_openai_client()
+        system_prompt = (
+            "You are a retirement planning assistant. "
+            "Use the provided plan data to answer questions with actionable, concise guidance. "
+            "If a recalculation is required, do the math required by varrying either the input suggested by the user or providing multiple different scenarios."
+        )
+        plan_context = json.dumps(plan_data, default=str) if plan_data else "No plan data supplied."
+        user_prompt = (
+            f"User question: {message}\n\n"
+            f"Current retirement plan data (JSON): {plan_context}\n\n"
+            "Highlight trade-offs, maintain a calm tone, and reference exact figures if available."
+        )
+        
+        completion = client.chat.completions.create(
+            model='gpt-5',
+            temperature=0.2,
+            messages=[
+                {'role': 'system', 'content': system_prompt},
+                {'role': 'user', 'content': user_prompt}
+            ],
+        )
+        
+        answer = completion.choices[0].message.content.strip()
+        return jsonify({'response': answer})
+    except RuntimeError as err:
+        return jsonify({'error': str(err)}), 500
+    except Exception as exc:
+        return jsonify({'error': 'Unable to complete chat request.', 'details': str(exc)}), 500
+
 if __name__ == '__main__':
     app.run(debug=True, port=5001)
-

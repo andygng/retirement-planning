@@ -10,8 +10,7 @@ const questions = [
         title: 'What is your ideal monthly retirement income?',
         description: 'This is the disposable income you\'d like to have each month during retirement (after taxes).',
         type: 'number',
-        suffix: '$',
-        placeholder: '5000',
+        prefix: '$',
         required: true
     },
     {
@@ -19,7 +18,6 @@ const questions = [
         title: 'At what age would you like to retire?',
         description: 'Enter your target retirement age.',
         type: 'number',
-        placeholder: '65',
         min: 1,
         max: 100,
         required: true
@@ -30,7 +28,6 @@ const questions = [
         description: 'This is the percentage of your net worth you plan to withdraw annually. A common rate is 4%.',
         type: 'number',
         suffix: '%',
-        placeholder: '4',
         min: 0.1,
         max: 10,
         step: 0.1,
@@ -42,7 +39,6 @@ const questions = [
         title: 'What is your current age?',
         description: 'Enter your current age.',
         type: 'number',
-        placeholder: '35',
         min: 1,
         max: 100,
         required: true
@@ -52,8 +48,7 @@ const questions = [
         title: 'What is your current monthly income?',
         description: 'Enter your current monthly income (before taxes).',
         type: 'number',
-        suffix: '$',
-        placeholder: '8000',
+        prefix: '$',
         required: true
     },
     {
@@ -61,8 +56,7 @@ const questions = [
         title: 'What is your current total asset value?',
         description: 'Enter the total value of all your current investments and savings.',
         type: 'number',
-        suffix: '$',
-        placeholder: '100000',
+        prefix: '$',
         required: true
     },
     {
@@ -71,7 +65,6 @@ const questions = [
         description: 'Enter your expected Compound Annual Growth Rate (CAGR) as a percentage. A typical range is 5-8%.',
         type: 'number',
         suffix: '%',
-        placeholder: '7',
         min: -100,
         max: 100,
         step: 0.1,
@@ -82,8 +75,7 @@ const questions = [
         title: 'How much do you save for retirement each month?',
         description: 'Enter the amount you currently save for retirement each month.',
         type: 'number',
-        suffix: '$',
-        placeholder: '1500',
+        prefix: '$',
         required: true
     },
     {
@@ -92,7 +84,6 @@ const questions = [
         description: 'Enter your effective tax rate during working years as a percentage.',
         type: 'number',
         suffix: '%',
-        placeholder: '30',
         min: 0,
         max: 100,
         step: 0.1,
@@ -107,11 +98,173 @@ const questions = [
     }
 ];
 
+const QUESTION_TRANSITION_DURATION = 600;
+let dashboardSlideElement = null;
+let dashboardTransitionActive = false;
+
+function shouldFormatWithCommas(question) {
+    return question && question.prefix === '$';
+}
+
+function sanitizeNumberString(value) {
+    if (value === undefined || value === null) {
+        return '';
+    }
+    return value.toString().replace(/,/g, '').trim();
+}
+
+function formatWithCommas(value) {
+    const sanitized = sanitizeNumberString(value);
+    if (sanitized === '') {
+        return '';
+    }
+    const parts = sanitized.split('.');
+    let integerPart = parts[0];
+    const decimalPart = parts[1];
+    let sign = '';
+    
+    if (integerPart.startsWith('-')) {
+        sign = '-';
+        integerPart = integerPart.slice(1);
+    }
+    
+    const formattedInt = integerPart.replace(/\B(?=(\d{3})+(?!\d))/g, ',') || '0';
+    return `${sign}${formattedInt}${decimalPart !== undefined ? `.${decimalPart}` : ''}`;
+}
+
+function getDisplayValue(question, value) {
+    if (shouldFormatWithCommas(question)) {
+        return formatWithCommas(value);
+    }
+    return value || '';
+}
+
+function payoutItemTemplate(payout, index) {
+    const amountDisplay = formatWithCommas(payout.amount || '');
+    return `
+        <div class="payout-item" data-index="${index}">
+            <div class="input-group" style="flex: 1;">
+                <label>Amount</label>
+                <div class="input-affix has-prefix">
+                    <span class="affix prefix">$</span>
+                    <input type="text" inputmode="decimal" class="payout-amount" value="${amountDisplay}">
+                </div>
+            </div>
+            <div class="input-group" style="flex: 1;">
+                <label>Age When Received</label>
+                <input type="number" class="payout-year" value="${payout.year || ''}" min="1" max="100">
+            </div>
+            <button type="button" class="btn-remove" data-action="remove-payout">Remove</button>
+        </div>
+    `;
+}
+
+function ensurePayoutsArray() {
+    if (!Array.isArray(answers.payouts)) {
+        answers.payouts = [];
+    }
+}
+
+function updatePayoutsList(listEl, messageEl) {
+    ensurePayoutsArray();
+    if (!listEl) return;
+    listEl.innerHTML = answers.payouts.map((payout, index) => payoutItemTemplate(payout, index)).join('');
+    if (messageEl) {
+        messageEl.style.display = answers.payouts.length ? 'none' : 'block';
+    }
+}
+
+function formatCurrencyInputElement(input) {
+    if (!input) {
+        return '';
+    }
+    const previousValue = input.value;
+    const caretPosition = input.selectionStart;
+    const sanitized = sanitizeNumberString(previousValue);
+    const formatted = formatWithCommas(sanitized);
+    input.value = formatted;
+    if (document.activeElement === input && typeof caretPosition === 'number') {
+        const diff = formatted.length - previousValue.length;
+        const newPosition = Math.max(0, caretPosition + diff);
+        try {
+            input.setSelectionRange(newPosition, newPosition);
+        } catch (err) {
+            // Ignore selection errors (e.g., unsupported input types)
+        }
+    }
+    return sanitized;
+}
+
+function transitionOutCurrentQuestion(callback) {
+    const container = document.getElementById('questionContainer');
+    const currentQuestion = container ? container.querySelector('.question') : null;
+    if (!currentQuestion) {
+        if (typeof callback === 'function') {
+            callback();
+        }
+        return;
+    }
+    currentQuestion.classList.add('exiting');
+    setTimeout(() => {
+        if (currentQuestion.parentNode) {
+            currentQuestion.remove();
+        }
+        if (typeof callback === 'function') {
+            callback();
+        }
+    }, QUESTION_TRANSITION_DURATION);
+}
+
+function triggerDashboardTransition() {
+    if (dashboardTransitionActive) {
+        return;
+    }
+    dashboardTransitionActive = true;
+    document.body.classList.add('dashboard-transition');
+    dashboardSlideElement = document.createElement('div');
+    dashboardSlideElement.className = 'dashboard-slide';
+    dashboardSlideElement.innerHTML = `
+        <div class="dashboard-slide__content">
+            <div class="dashboard-slide__title">Building your dashboard</div>
+            <div class="dashboard-slide__subtitle">We are running the numbers and preparing your personalized outlook.</div>
+            <div class="dashboard-slide__glimpse">
+                <div class="dashboard-slide__card">
+                    <div class="dashboard-slide__card-title">Projected Net Worth</div>
+                    <div class="dashboard-slide__card-value">$1.8M</div>
+                </div>
+                <div class="dashboard-slide__card">
+                    <div class="dashboard-slide__card-title">Retirement Age</div>
+                    <div class="dashboard-slide__card-value">64 yrs</div>
+                </div>
+                <div class="dashboard-slide__card">
+                    <div class="dashboard-slide__card-title">Monthly Income</div>
+                    <div class="dashboard-slide__card-value">$7,250</div>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(dashboardSlideElement);
+    requestAnimationFrame(() => {
+        dashboardSlideElement.classList.add('active');
+    });
+}
+
+function cancelDashboardTransition() {
+    document.body.classList.remove('dashboard-transition');
+    dashboardTransitionActive = false;
+    if (dashboardSlideElement && dashboardSlideElement.parentNode) {
+        dashboardSlideElement.parentNode.removeChild(dashboardSlideElement);
+    }
+    dashboardSlideElement = null;
+}
+
 function renderQuestion(index) {
     const question = questions[index];
     const container = document.getElementById('questionContainer');
+    if (!question || !container) {
+        return;
+    }
     
-    // Create question element
     const questionDiv = document.createElement('div');
     questionDiv.className = 'question';
     questionDiv.id = `question-${index}`;
@@ -129,63 +282,58 @@ function renderQuestion(index) {
     
     questionDiv.innerHTML = html;
     
-    // Remove existing question with animation
-    const existingQuestion = container.querySelector('.question');
-    if (existingQuestion) {
-        existingQuestion.classList.add('exiting');
-        setTimeout(() => {
-            if (existingQuestion.parentNode) {
-                existingQuestion.remove();
-            }
-        }, 600);
-    }
-    
-    // Add new question
-    setTimeout(() => {
+    const mountQuestion = () => {
         container.appendChild(questionDiv);
-        // Focus on input
-        const input = questionDiv.querySelector('input, select');
-        if (input) {
-            input.focus();
+        const focusable = questionDiv.querySelector('.question-body input, .question-body select');
+        if (focusable && question.type !== 'payouts') {
+            focusable.focus();
         }
-    }, existingQuestion ? 600 : 0);
+        
+        if (question.type === 'payouts') {
+            attachPayoutsListeners(questionDiv);
+        } else {
+            attachInputListeners(questionDiv, question);
+        }
+        
+        updateProgress(index);
+        const backBtn = document.getElementById('backBtn');
+        if (backBtn) {
+            backBtn.style.display = index > 0 ? 'block' : 'none';
+        }
+    };
     
-    // Update progress
-    updateProgress(index);
-    
-    // Update back button
-    const backBtn = document.getElementById('backBtn');
-    if (index > 0) {
-        backBtn.style.display = 'block';
-    } else {
-        backBtn.style.display = 'none';
-    }
-    
-    // Attach event listeners
-    if (question.type === 'payouts') {
-        attachPayoutsListeners(questionDiv);
-    } else {
-        attachInputListeners(questionDiv, question);
-    }
+    transitionOutCurrentQuestion(mountQuestion);
 }
 
 function renderInput(question) {
-    const value = answers[question.id] || '';
-    let inputHtml = '';
+    const rawValue = answers[question.id] || '';
+    const displayValue = question.type === 'number' ? getDisplayValue(question, rawValue) : rawValue;
+    let inputHtml = '<div class="question-body">';
     
     if (question.type === 'number') {
-        const suffix = question.suffix ? `<span class="suffix">${question.suffix}</span>` : '';
-        inputHtml = `
-            <div class="input-group">
-                <div class="input-suffix">
+        const prefix = question.prefix ? `<span class="affix prefix">${question.prefix}</span>` : '';
+        const suffix = question.suffix ? `<span class="affix suffix">${question.suffix}</span>` : '';
+        const affixClasses = ['input-affix', question.prefix ? 'has-prefix' : '', question.suffix ? 'has-suffix' : '']
+            .filter(Boolean)
+            .join(' ');
+        const allowsDecimals = typeof question.step === 'number' && !Number.isInteger(question.step);
+        const htmlInputType = shouldFormatWithCommas(question) ? 'text' : 'number';
+        const inputMode = shouldFormatWithCommas(question) || allowsDecimals ? 'decimal' : 'numeric';
+        const placeholderAttr = question.placeholder ? `placeholder="${question.placeholder}"` : '';
+        inputHtml += `
+            <div class="input-group narrow-input">
+                <div class="${affixClasses}">
+                    ${prefix}
                     <input 
-                        type="number" 
+                        type="${htmlInputType}" 
                         id="${question.id}" 
-                        placeholder="${question.placeholder || ''}"
-                        value="${value}"
-                        ${question.min !== undefined ? `min="${question.min}"` : ''}
-                        ${question.max !== undefined ? `max="${question.max}"` : ''}
-                        ${question.step !== undefined ? `step="${question.step}"` : ''}
+                        ${inputMode ? `inputmode="${inputMode}"` : ''}
+                        ${placeholderAttr}
+                        value="${displayValue}"
+                        ${!shouldFormatWithCommas(question) && question.min !== undefined ? `min="${question.min}"` : ''}
+                        ${!shouldFormatWithCommas(question) && question.max !== undefined ? `max="${question.max}"` : ''}
+                        ${!shouldFormatWithCommas(question) && question.step !== undefined ? `step="${question.step}"` : ''}
+                        autocomplete="off"
                         required
                     >
                     ${suffix}
@@ -193,11 +341,11 @@ function renderInput(question) {
             </div>
         `;
     } else if (question.type === 'select') {
-        inputHtml = `
-            <div class="input-group">
+        inputHtml += `
+            <div class="input-group narrow-input">
                 <select id="${question.id}" required>
                     ${question.options.map(opt => 
-                        `<option value="${opt.value}" ${value === opt.value ? 'selected' : ''}>${opt.label}</option>`
+                        `<option value="${opt.value}" ${rawValue === opt.value ? 'selected' : ''}>${opt.label}</option>`
                     ).join('')}
                 </select>
             </div>
@@ -205,47 +353,30 @@ function renderInput(question) {
     }
     
     inputHtml += `
-        <button class="btn btn-primary" id="nextBtn">Continue →</button>
+        <button type="button" class="btn btn-primary" id="nextBtn">Continue →</button>
+    </div>
     `;
     
     return inputHtml;
 }
 
 function renderPayoutsInput(question) {
-    const payouts = answers.payouts || [];
+    ensurePayoutsArray();
+    const hasPayouts = answers.payouts.length > 0;
+    const emptyMessageStyle = hasPayouts ? 'style="display: none;"' : '';
     
-    let html = '<div class="payouts-container">';
-    
-    if (payouts.length === 0) {
-        html += '<p style="color: rgba(255, 255, 255, 0.8); margin-bottom: 16px;">No payouts added yet. Click "Add Payout" to add one, or click "Continue" to skip.</p>';
-    }
-    
-    payouts.forEach((payout, index) => {
-        html += `
-            <div class="payout-item" data-index="${index}">
-                <div class="input-group" style="flex: 1;">
-                    <label>Amount</label>
-                    <div class="input-suffix">
-                        <input type="number" class="payout-amount" placeholder="100000" value="${payout.amount || ''}" min="0">
-                        <span class="suffix">$</span>
-                    </div>
+    return `
+        <div class="question-body">
+            <div class="payouts-container">
+                <p class="payouts-empty-message" ${emptyMessageStyle}>No payouts added yet. Click "Add Payout" to add one, or click "Continue" to skip.</p>
+                <div class="payouts-list">
+                    ${answers.payouts.map((payout, index) => payoutItemTemplate(payout, index)).join('')}
                 </div>
-                <div class="input-group" style="flex: 1;">
-                    <label>Age When Received</label>
-                    <input type="number" class="payout-year" placeholder="45" value="${payout.year || ''}" min="1" max="100">
-                </div>
-                <button class="btn-remove" onclick="removePayout(${index})">Remove</button>
+                <button type="button" class="btn-add-payout" id="addPayoutBtn">+ Add Payout</button>
             </div>
-        `;
-    });
-    
-    html += `
-        <button class="btn-add-payout" onclick="addPayout()">+ Add Payout</button>
-    </div>
-    <button class="btn btn-primary" id="nextBtn" style="margin-top: 24px;">Continue →</button>
+            <button type="button" class="btn btn-primary" id="nextBtn" style="margin-top: 24px;">Continue →</button>
+        </div>
     `;
-    
-    return html;
 }
 
 function attachInputListeners(questionDiv, question) {
@@ -254,7 +385,15 @@ function attachInputListeners(questionDiv, question) {
     
     // Auto-save on input
     input.addEventListener('input', (e) => {
-        answers[question.id] = e.target.value;
+        let value = e.target.value;
+        if (question.type === 'number') {
+            if (shouldFormatWithCommas(question)) {
+                value = formatCurrencyInputElement(e.target);
+            } else {
+                value = sanitizeNumberString(value);
+            }
+        }
+        answers[question.id] = value;
         validateAndEnableButton(input, nextBtn, question);
         
         // Re-validate related questions if needed
@@ -290,18 +429,47 @@ function attachInputListeners(questionDiv, question) {
 
 function attachPayoutsListeners(questionDiv) {
     const nextBtn = questionDiv.querySelector('#nextBtn');
+    const payoutsList = questionDiv.querySelector('.payouts-list');
+    const emptyMessage = questionDiv.querySelector('.payouts-empty-message');
+    const addBtn = questionDiv.querySelector('#addPayoutBtn');
     
-    // Save payouts on any change
-    questionDiv.addEventListener('input', () => {
-        savePayouts();
-    });
+    if (addBtn) {
+        addBtn.addEventListener('click', () => {
+            ensurePayoutsArray();
+            answers.payouts.push({ amount: '', year: '' });
+            updatePayoutsList(payoutsList, emptyMessage);
+        });
+    }
+    
+    if (payoutsList) {
+        questionDiv.addEventListener('input', (e) => {
+            if (e.target.classList.contains('payout-amount')) {
+                formatCurrencyInputElement(e.target);
+            }
+            if (e.target.classList.contains('payout-amount') || e.target.classList.contains('payout-year')) {
+                savePayouts();
+            }
+        });
+    
+        payoutsList.addEventListener('click', (e) => {
+            const removeBtn = e.target.closest('.btn-remove');
+            if (removeBtn) {
+                const item = removeBtn.closest('.payout-item');
+                const index = parseInt(item.dataset.index, 10);
+                if (!Number.isNaN(index)) {
+                    answers.payouts.splice(index, 1);
+                    updatePayoutsList(payoutsList, emptyMessage);
+                }
+            }
+        });
+    }
     
     nextBtn.disabled = false; // Payouts are optional
 }
 
 function validateAndEnableButton(input, button, question) {
     if (question.required) {
-        const value = input.value.trim();
+        const value = question.type === 'number' ? sanitizeNumberString(input.value) : input.value.trim();
         let isValid = value !== '';
         
         if (question.type === 'number' && isValid) {
@@ -342,35 +510,22 @@ function validateAndEnableButton(input, button, question) {
 }
 
 function savePayouts() {
-    const payoutItems = document.querySelectorAll('.payout-item');
+    const payoutItems = document.querySelectorAll('.payouts-list .payout-item');
     const payouts = [];
     
     payoutItems.forEach(item => {
-        const amount = item.querySelector('.payout-amount').value;
-        const year = item.querySelector('.payout-year').value;
+        const amountInput = item.querySelector('.payout-amount');
+        const yearInput = item.querySelector('.payout-year');
+        const amount = sanitizeNumberString(amountInput ? amountInput.value : '');
+        const year = sanitizeNumberString(yearInput ? yearInput.value : '');
         
-        if (amount && year) {
-            payouts.push({
-                amount: parseFloat(amount),
-                year: parseInt(year)
-            });
-        }
+        payouts.push({
+            amount,
+            year
+        });
     });
     
     answers.payouts = payouts;
-}
-
-function addPayout() {
-    if (!answers.payouts) {
-        answers.payouts = [];
-    }
-    answers.payouts.push({ amount: '', year: '' });
-    renderQuestion(currentQuestionIndex);
-}
-
-function removePayout(index) {
-    answers.payouts.splice(index, 1);
-    renderQuestion(currentQuestionIndex);
 }
 
 function updateProgress(index) {
@@ -384,8 +539,9 @@ function nextQuestion() {
         currentQuestionIndex++;
         renderQuestion(currentQuestionIndex);
     } else {
-        // All questions answered, submit to API
-        submitAnswers();
+        transitionOutCurrentQuestion(() => {
+            submitAnswers();
+        });
     }
 }
 
@@ -397,7 +553,14 @@ function previousQuestion() {
 }
 
 function submitAnswers() {
-    // Prepare data for API
+    const sanitizedPayouts = (answers.payouts || [])
+        .filter(payout => payout && (payout.amount || payout.year))
+        .map(payout => ({
+            amount: parseFloat(payout.amount),
+            year: parseInt(payout.year, 10)
+        }))
+        .filter(payout => !Number.isNaN(payout.amount) && !Number.isNaN(payout.year));
+    
     const data = {
         ideal_retirement_income: parseFloat(answers.ideal_retirement_income),
         ideal_retirement_age: parseInt(answers.ideal_retirement_age),
@@ -408,14 +571,11 @@ function submitAnswers() {
         cagr: parseFloat(answers.cagr),
         monthly_savings: parseFloat(answers.monthly_savings),
         working_tax_rate: parseFloat(answers.working_tax_rate),
-        payouts: answers.payouts || []
+        payouts: sanitizedPayouts
     };
     
-    // Show loading state
-    const container = document.querySelector('.question-container');
-    container.innerHTML = '<div style="text-align: center; padding: 40px;"><div style="font-size: 18px; color: rgba(255, 255, 255, 0.9);">Calculating your retirement plan...</div></div>';
+    triggerDashboardTransition();
     
-    // Submit to API
     fetch('/api/calculate', {
         method: 'POST',
         headers: {
@@ -435,20 +595,25 @@ function submitAnswers() {
         if (result.error) {
             throw new Error(result.error);
         }
-        // Store results in sessionStorage and redirect to dashboard
         sessionStorage.setItem('retirementPlan', JSON.stringify(result));
-        window.location.href = '/dashboard';
+        setTimeout(() => {
+            window.location.href = '/dashboard';
+        }, 700);
     })
     .catch(error => {
         console.error('Error:', error);
+        cancelDashboardTransition();
+        const container = document.querySelector('.question-container');
         const errorMessage = typeof error === 'string' ? error : (error.message || 'An unknown error occurred');
-        container.innerHTML = `
-            <div style="text-align: center; padding: 40px;">
-                <div style="font-size: 18px; color: #ffcccc; margin-bottom: 20px;">Error calculating retirement plan</div>
-                <div style="color: rgba(255, 255, 255, 0.9); margin-bottom: 20px; white-space: pre-wrap;">${errorMessage}</div>
-                <button class="btn btn-primary" onclick="location.reload()">Try Again</button>
-            </div>
-        `;
+        if (container) {
+            container.innerHTML = `
+                <div class="transition-error">
+                    <div style="margin-bottom: 16px;">We ran into an issue preparing your dashboard.</div>
+                    <div style="margin-bottom: 24px;">${errorMessage}</div>
+                    <button class="btn btn-primary" onclick="location.reload()">Try Again</button>
+                </div>
+            `;
+        }
     });
 }
 
@@ -466,4 +631,3 @@ document.addEventListener('DOMContentLoaded', () => {
     // Back button
     document.getElementById('backBtn').addEventListener('click', previousQuestion);
 });
-
