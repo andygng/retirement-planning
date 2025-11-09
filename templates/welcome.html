@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retirement Advisor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/onboarding.css') }}">
+</head>
+<body>
+    <div class="welcome-container">
+        <h1 class="welcome-title">Retirement Advisor</h1>
+        <p class="welcome-subtitle">Plan your financial future with confidence</p>
+        <button class="btn btn-primary" id="getStartedBtn">Get Started</button>
+    </div>
+    
+    <script>
+        document.getElementById('getStartedBtn').addEventListener('click', () => {
+            window.location.href = '/onboarding';
+        });
+    </script>
+</body>
+</html>
+

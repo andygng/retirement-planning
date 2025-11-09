@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retirement Plan Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+    <div class="dashboard-container">
+        <header class="dashboard-header">
+            <h1>Your Retirement Plan</h1>
+            <div class="header-buttons">
+                <button class="btn btn-restart" id="restartBtn">Restart</button>
+                <button class="btn btn-edit" id="editBtn">Edit Inputs</button>
+            </div>
+        </header>
+        
+        <div class="dashboard-content" id="dashboardContent">
+            <!-- Content will be populated by JavaScript -->
+        </div>
+        
+        <!-- Edit Modal -->
+        <div class="modal" id="editModal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Edit Inputs</h2>
+                    <button class="modal-close" id="closeModal">&times;</button>
+                </div>
+                <div class="modal-body" id="editForm">
+                    <!-- Form will be populated by JavaScript -->
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" id="cancelEdit">Cancel</button>
+                    <button class="btn btn-primary" id="saveEdit">Recalculate</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>
+
