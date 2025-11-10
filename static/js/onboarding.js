@@ -44,14 +44,6 @@ const questions = [
         required: true
     },
     {
-        id: 'current_monthly_income',
-        title: 'What is your current monthly income?',
-        description: 'Enter your current monthly income (before taxes).',
-        type: 'number',
-        prefix: '$',
-        required: true
-    },
-    {
         id: 'current_asset_values',
         title: 'What is your current total asset value?',
         description: 'Enter the total value of all your current investments and savings.',
@@ -76,17 +68,6 @@ const questions = [
         description: 'Enter the amount you currently save for retirement each month.',
         type: 'number',
         prefix: '$',
-        required: true
-    },
-    {
-        id: 'working_tax_rate',
-        title: 'What is your current tax rate?',
-        description: 'Enter your effective tax rate during working years as a percentage.',
-        type: 'number',
-        suffix: '%',
-        min: 0,
-        max: 100,
-        step: 0.1,
         required: true
     },
     {
@@ -566,11 +547,9 @@ function submitAnswers() {
         ideal_retirement_age: parseInt(answers.ideal_retirement_age),
         withdrawal_rate: parseFloat(answers.withdrawal_rate),
         current_age: parseInt(answers.current_age),
-        current_monthly_income: parseFloat(answers.current_monthly_income),
         current_asset_values: parseFloat(answers.current_asset_values),
         cagr: parseFloat(answers.cagr),
         monthly_savings: parseFloat(answers.monthly_savings),
-        working_tax_rate: parseFloat(answers.working_tax_rate),
         payouts: sanitizedPayouts
     };
     

@@ -169,11 +169,9 @@ body::after {
     justify-content: center;
 }
 
-.input-affix.has-prefix input {
-    padding-left: 32px;
-}
-
+.input-affix.has-prefix input,
 .input-affix.has-suffix input {
+    padding-left: 32px;
     padding-right: 32px;
 }
 

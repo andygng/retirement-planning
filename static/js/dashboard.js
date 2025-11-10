@@ -1,6 +1,17 @@
 let planData = null;
+let basePlanData = null;
 let charts = {};
 const CHAT_STORAGE_KEY = 'retirementChatHistory';
+const CURRENCY_STORAGE_KEY = 'retirementCurrencyPreferences';
+
+const currencyConfig = {
+    CAD: { locale: 'en-CA', currency: 'CAD', shortSymbol: 'CA$', defaultRate: 1 },
+    USD: { locale: 'en-US', currency: 'USD', shortSymbol: 'US$', defaultRate: 0.74 },
+    GBP: { locale: 'en-GB', currency: 'GBP', shortSymbol: 'GBP', defaultRate: 0.58 }
+};
+
+const currencyFormatters = {};
+let currencyState = loadCurrencyState();
 let chatHistory = [];
 let chatInitialized = false;
 let chatIsSending = false;
@@ -8,31 +19,52 @@ const chatElements = {};
 
 // Load plan data from sessionStorage
 document.addEventListener('DOMContentLoaded', () => {
+    initializeCurrencyControls();
     const storedData = sessionStorage.getItem('retirementPlan');
     if (storedData) {
-        planData = JSON.parse(storedData);
+        basePlanData = JSON.parse(storedData);
+        refreshPlanUsingCurrency();
         renderDashboard();
         initializeChatAssistant();
     } else {
         // No data, redirect to welcome page
         window.location.href = '/';
+        return;
     }
     
     // Edit button
-    document.getElementById('editBtn').addEventListener('click', openEditModal);
-    document.getElementById('closeModal').addEventListener('click', closeEditModal);
-    document.getElementById('cancelEdit').addEventListener('click', closeEditModal);
-    document.getElementById('saveEdit').addEventListener('click', saveAndRecalculate);
+    const editBtn = document.getElementById('editBtn');
+    if (editBtn) {
+        editBtn.addEventListener('click', openEditModal);
+    }
+    const closeModalBtn = document.getElementById('closeModal');
+    if (closeModalBtn) {
+        closeModalBtn.addEventListener('click', closeEditModal);
+    }
+    const cancelEditBtn = document.getElementById('cancelEdit');
+    if (cancelEditBtn) {
+        cancelEditBtn.addEventListener('click', closeEditModal);
+    }
+    const saveEditBtn = document.getElementById('saveEdit');
+    if (saveEditBtn) {
+        saveEditBtn.addEventListener('click', saveAndRecalculate);
+    }
     
     // Restart button
-    document.getElementById('restartBtn').addEventListener('click', () => {
-        sessionStorage.clear();
-        window.location.href = '/';
-    });
+    const restartBtn = document.getElementById('restartBtn');
+    if (restartBtn) {
+        restartBtn.addEventListener('click', () => {
+            sessionStorage.clear();
+            window.location.href = '/';
+        });
+    }
 });
 
 function renderDashboard() {
     const container = document.getElementById('dashboardContent');
+    if (!container || !planData) {
+        return;
+    }
     
     let html = `
         <div class="summary-cards">
@@ -85,6 +117,9 @@ function renderSummaryCard(title, value, subtitle, valueClass = '') {
 }
 
 function renderCharts() {
+    if (!planData || !Array.isArray(planData.year_by_year)) {
+        return;
+    }
     const yearByYear = planData.year_by_year;
     const years = yearByYear.map(y => y.year);
     const projected = yearByYear.map(y => y.total_net_worth);
@@ -195,6 +230,9 @@ function renderCharts() {
 }
 
 function generateCommentary() {
+    if (!planData || !planData.inputs) {
+        return '';
+    }
     const gap = planData.gap;
     const gapPercentage = planData.gap_percentage;
     const requiredSavings = planData.required_monthly_savings;
@@ -280,7 +318,7 @@ function generateCommentary() {
                 <li><strong>Review Annually:</strong> Revisit this plan annually to adjust for changes in income, 
                     expenses, or goals.</li>
                 <li><strong>Diversify Investments:</strong> Ensure your portfolio is well-diversified to achieve 
-                    your assumed ${(planData.inputs.cagr * 100).toFixed(1)}% annual growth rate.</li>
+                    your assumed ${Number(planData.inputs.cagr).toFixed(1)}% annual growth rate.</li>
             </ul>
         </div>
     `;
@@ -291,8 +329,8 @@ function generateCommentary() {
             <h3>Important Assumptions</h3>
             <p>This plan is based on the following assumptions:</p>
             <ul>
-                <li>Annual growth rate (CAGR) of ${(planData.inputs.cagr * 100).toFixed(1)}%</li>
-                <li>Withdrawal rate of ${(planData.inputs.withdrawal_rate * 100).toFixed(1)}% annually</li>
+                <li>Annual growth rate (CAGR) of ${Number(planData.inputs.cagr).toFixed(1)}%</li>
+                <li>Withdrawal rate of ${Number(planData.inputs.withdrawal_rate).toFixed(1)}% annually</li>
                 <li>Canadian tax rates applied to retirement income (effective rate: ${planData.retirement_tax_rate.toFixed(1)}%)</li>
                 <li>Monthly savings contributions invested immediately</li>
                 <li>All investments compound monthly</li>
@@ -308,13 +346,15 @@ function generateCommentary() {
 }
 
 function renderProjectionTable() {
+    if (!planData || !Array.isArray(planData.year_by_year)) {
+        return '';
+    }
     const yearByYear = planData.year_by_year;
     
     let html = `
         <table>
             <thead>
                 <tr>
-                    <th>Year</th>
                     <th>Age</th>
                     <th class="number">Current Assets</th>
                     <th class="number">Savings Growth</th>
@@ -330,7 +370,6 @@ function renderProjectionTable() {
     yearByYear.forEach(year => {
         html += `
             <tr>
-                <td>${year.year}</td>
                 <td>${year.age}</td>
                 <td class="number">${formatCurrency(year.current_assets)}</td>
                 <td class="number">${formatCurrency(year.savings_contributions)}</td>
@@ -350,51 +389,55 @@ function renderProjectionTable() {
     return html;
 }
 
-function openEditModal() {
-    const modal = document.getElementById('editModal');
+function populateEditForm() {
     const form = document.getElementById('editForm');
+    if (!form || !planData || !planData.inputs) {
+        return;
+    }
     const inputs = planData.inputs;
+    const currencyLabel = currencyState.selected;
     
     form.innerHTML = `
         <div class="form-group">
-            <label>Ideal Monthly Retirement Income ($)</label>
-            <input type="number" id="edit_ideal_retirement_income" value="${inputs.ideal_retirement_income}" min="0" step="100">
+            <label>Ideal Monthly Retirement Income (${currencyLabel})</label>
+            <input type="number" id="edit_ideal_retirement_income" value="${inputs.ideal_retirement_income ?? ''}" min="0" step="100">
         </div>
         <div class="form-group">
             <label>Ideal Retirement Age</label>
-            <input type="number" id="edit_ideal_retirement_age" value="${inputs.ideal_retirement_age}" min="1" max="100">
+            <input type="number" id="edit_ideal_retirement_age" value="${inputs.ideal_retirement_age ?? ''}" min="1" max="100">
         </div>
         <div class="form-group">
             <label>Withdrawal Rate (%)</label>
-            <input type="number" id="edit_withdrawal_rate" value="${inputs.withdrawal_rate}" min="0.1" max="10" step="0.1">
+            <input type="number" id="edit_withdrawal_rate" value="${inputs.withdrawal_rate ?? ''}" min="0.1" max="10" step="0.1">
         </div>
         <div class="form-group">
             <label>Current Age</label>
-            <input type="number" id="edit_current_age" value="${inputs.current_age}" min="1" max="100">
+            <input type="number" id="edit_current_age" value="${inputs.current_age ?? ''}" min="1" max="100">
         </div>
         <div class="form-group">
-            <label>Current Monthly Income ($)</label>
-            <input type="number" id="edit_current_monthly_income" value="${inputs.current_monthly_income}" min="0" step="100">
-        </div>
-        <div class="form-group">
-            <label>Current Asset Values ($)</label>
-            <input type="number" id="edit_current_asset_values" value="${inputs.current_asset_values}" min="0" step="1000">
+            <label>Current Asset Values (${currencyLabel})</label>
+            <input type="number" id="edit_current_asset_values" value="${inputs.current_asset_values ?? ''}" min="0" step="1000">
         </div>
         <div class="form-group">
             <label>Expected Annual Growth Rate (CAGR %)</label>
-            <input type="number" id="edit_cagr" value="${inputs.cagr}" min="-100" max="100" step="0.1">
+            <input type="number" id="edit_cagr" value="${inputs.cagr ?? ''}" min="-100" max="100" step="0.1">
         </div>
         <div class="form-group">
-            <label>Monthly Savings for Retirement ($)</label>
-            <input type="number" id="edit_monthly_savings" value="${inputs.monthly_savings}" min="0" step="100">
-        </div>
-        <div class="form-group">
-            <label>Working Years Tax Rate (%)</label>
-            <input type="number" id="edit_working_tax_rate" value="${inputs.working_tax_rate}" min="0" max="100" step="0.1">
+            <label>Monthly Savings for Retirement (${currencyLabel})</label>
+            <input type="number" id="edit_monthly_savings" value="${inputs.monthly_savings ?? ''}" min="0" step="100">
         </div>
     `;
-    
-    modal.classList.add('active');
+}
+
+function openEditModal(event) {
+    if (event) {
+        event.preventDefault();
+    }
+    const modal = document.getElementById('editModal');
+    populateEditForm();
+    if (modal) {
+        modal.classList.add('active');
+    }
 }
 
 function closeEditModal() {
@@ -402,18 +445,20 @@ function closeEditModal() {
 }
 
 function saveAndRecalculate() {
+    if (!planData || !planData.inputs) {
+        return;
+    }
     const inputs = {
         ideal_retirement_income: parseFloat(document.getElementById('edit_ideal_retirement_income').value),
         ideal_retirement_age: parseInt(document.getElementById('edit_ideal_retirement_age').value),
         withdrawal_rate: parseFloat(document.getElementById('edit_withdrawal_rate').value),
         current_age: parseInt(document.getElementById('edit_current_age').value),
-        current_monthly_income: parseFloat(document.getElementById('edit_current_monthly_income').value),
         current_asset_values: parseFloat(document.getElementById('edit_current_asset_values').value),
         cagr: parseFloat(document.getElementById('edit_cagr').value),
         monthly_savings: parseFloat(document.getElementById('edit_monthly_savings').value),
-        working_tax_rate: parseFloat(document.getElementById('edit_working_tax_rate').value),
-        payouts: planData.inputs.payouts || []
+        payouts: Array.isArray(planData.inputs.payouts) ? planData.inputs.payouts.map(payout => ({ ...payout })) : []
     };
+    const normalizedInputs = convertInputsToBaseCurrency(inputs);
     
     // Show loading
     document.getElementById('dashboardContent').innerHTML = '<div class="loading">Recalculating...</div>';
@@ -425,13 +470,13 @@ function saveAndRecalculate() {
         headers: {
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify(inputs)
+        body: JSON.stringify(normalizedInputs)
     })
     .then(response => response.json())
     .then(result => {
-        planData = result;
+        basePlanData = result;
         sessionStorage.setItem('retirementPlan', JSON.stringify(result));
-        renderDashboard();
+        refreshDashboardAfterCurrencyChange();
         if (chatInitialized) {
             setChatStatus('Plan updated. Ask what changed.');
         }
@@ -444,21 +489,26 @@ function saveAndRecalculate() {
 }
 
 function formatCurrency(amount) {
-    return new Intl.NumberFormat('en-CA', {
-        style: 'currency',
-        currency: 'CAD',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0
-    }).format(amount);
+    const numericValue = typeof amount === 'number' ? amount : parseFloat(amount);
+    const value = Number.isFinite(numericValue) ? numericValue : 0;
+    const formatter = getCurrencyFormatter(currencyState.selected);
+    return formatter.format(value);
 }
 
 function formatCurrencyShort(amount) {
-    if (amount >= 1000000) {
-        return '$' + (amount / 1000000).toFixed(1) + 'M';
-    } else if (amount >= 1000) {
-        return '$' + (amount / 1000).toFixed(0) + 'K';
+    const numericValue = typeof amount === 'number' ? amount : parseFloat(amount);
+    const value = Number.isFinite(numericValue) ? numericValue : 0;
+    const sign = value < 0 ? '-' : '';
+    const absolute = Math.abs(value);
+    const meta = currencyConfig[currencyState.selected] || currencyConfig.CAD;
+    const symbol = meta.shortSymbol || meta.currency || '$';
+    
+    if (absolute >= 1000000) {
+        return `${sign}${symbol}${(absolute / 1000000).toFixed(1)}M`;
+    } else if (absolute >= 1000) {
+        return `${sign}${symbol}${(absolute / 1000).toFixed(0)}K`;
     }
-    return '$' + amount.toFixed(0);
+    return `${sign}${symbol}${absolute.toFixed(0)}`;
 }
 
 function initializeChatAssistant() {
@@ -706,4 +756,273 @@ function escapeHtml(str) {
         "'": '&#39;'
     };
     return String(str).replace(/[&<>"']/g, char => map[char]);
+}
+
+function initializeCurrencyControls() {
+    ensureCurrencyRate(currencyState.selected);
+    updateCurrencyRateUI();
+    
+    const selector = document.getElementById('currencySelector');
+    const rateInput = document.getElementById('currencyRateInput');
+    
+    if (selector) {
+        selector.addEventListener('change', () => {
+            const selectedCurrency = selector.value;
+            if (!currencyConfig[selectedCurrency]) {
+                return;
+            }
+            currencyState.selected = selectedCurrency;
+            ensureCurrencyRate(selectedCurrency);
+            saveCurrencyState();
+            updateCurrencyRateUI();
+            refreshDashboardAfterCurrencyChange();
+        });
+    }
+    
+    if (rateInput) {
+        rateInput.addEventListener('change', () => {
+            const updatedRate = sanitizeRate(rateInput.value, getCurrentCurrencyRate());
+            currencyState.rates[currencyState.selected] = updatedRate;
+            saveCurrencyState();
+            updateCurrencyRateUI();
+            refreshDashboardAfterCurrencyChange();
+        });
+    }
+}
+
+function updateCurrencyRateUI() {
+    const selector = document.getElementById('currencySelector');
+    const rateInput = document.getElementById('currencyRateInput');
+    const rateSuffix = document.getElementById('currencyRateSuffix');
+    const rate = getCurrentCurrencyRate();
+    
+    if (selector && selector.value !== currencyState.selected) {
+        selector.value = currencyState.selected;
+    }
+    if (rateInput) {
+        rateInput.value = formatRateValue(rate);
+    }
+    if (rateSuffix) {
+        rateSuffix.textContent = currencyState.selected;
+    }
+}
+
+function refreshDashboardAfterCurrencyChange() {
+    if (!basePlanData) {
+        return;
+    }
+    refreshPlanUsingCurrency();
+    renderDashboard();
+    refreshEditFormIfOpen();
+}
+
+function refreshPlanUsingCurrency() {
+    if (!basePlanData) {
+        planData = null;
+        return;
+    }
+    planData = convertPlanData(basePlanData, getCurrentCurrencyRate());
+}
+
+function refreshEditFormIfOpen() {
+    const modal = document.getElementById('editModal');
+    if (modal && modal.classList.contains('active')) {
+        populateEditForm();
+    }
+}
+
+function convertPlanData(sourcePlan, rate) {
+    if (!sourcePlan) {
+        return null;
+    }
+    const safeRate = Number.isFinite(rate) && rate > 0 ? rate : 1;
+    const converted = JSON.parse(JSON.stringify(sourcePlan));
+    
+    convertNumericFields(converted, [
+        'target_net_worth',
+        'projected_current_assets',
+        'projected_savings',
+        'projected_payouts',
+        'total_projected_net_worth',
+        'gap',
+        'required_monthly_savings',
+        'current_monthly_savings',
+        'pre_tax_retirement_income'
+    ], safeRate);
+    
+    if (Array.isArray(converted.year_by_year)) {
+        converted.year_by_year = converted.year_by_year.map(entry => {
+            const updatedEntry = { ...entry };
+            convertNumericFields(updatedEntry, [
+                'current_assets',
+                'savings_contributions',
+                'payouts_value',
+                'total_net_worth',
+                'target_net_worth',
+                'gap'
+            ], safeRate);
+            return updatedEntry;
+        });
+    }
+    
+    if (converted.inputs) {
+        convertNumericFields(converted.inputs, [
+            'ideal_retirement_income',
+            'current_asset_values',
+            'monthly_savings'
+        ], safeRate);
+        
+        if (Array.isArray(converted.inputs.payouts)) {
+            converted.inputs.payouts = converted.inputs.payouts.map(payout => {
+                const payoutClone = { ...payout };
+                const amount = parseFloat(payoutClone.amount);
+                if (Number.isFinite(amount)) {
+                    payoutClone.amount = amount * safeRate;
+                }
+                return payoutClone;
+            });
+        }
+    }
+    
+    return converted;
+}
+
+function convertNumericFields(target, fields, rate) {
+    if (!target || !Array.isArray(fields)) {
+        return;
+    }
+    fields.forEach(field => {
+        if (typeof target[field] === 'number') {
+            target[field] = target[field] * rate;
+        } else if (typeof target[field] === 'string') {
+            const parsed = parseFloat(target[field]);
+            if (Number.isFinite(parsed)) {
+                target[field] = parsed * rate;
+            }
+        }
+    });
+}
+
+function convertInputsToBaseCurrency(inputs) {
+    const rate = getCurrentCurrencyRate();
+    if (!Number.isFinite(rate) || rate <= 0 || rate === 1) {
+        return inputs;
+    }
+    const normalized = { ...inputs };
+    ['ideal_retirement_income', 'current_asset_values', 'monthly_savings'].forEach(field => {
+        const parsed = parseFloat(normalized[field]);
+        if (Number.isFinite(parsed)) {
+            normalized[field] = parsed / rate;
+        }
+    });
+    normalized.payouts = Array.isArray(inputs.payouts)
+        ? inputs.payouts.map(payout => {
+            const payoutClone = { ...payout };
+            const amount = parseFloat(payoutClone.amount);
+            if (Number.isFinite(amount)) {
+                payoutClone.amount = amount / rate;
+            }
+            return payoutClone;
+        })
+        : [];
+    return normalized;
+}
+
+function getCurrentCurrencyRate() {
+    const selected = currencyConfig[currencyState.selected] ? currencyState.selected : 'CAD';
+    ensureCurrencyRate(selected);
+    const rate = currencyState.rates[selected];
+    return Number.isFinite(rate) && rate > 0 ? rate : 1;
+}
+
+function getCurrencyFormatter(code) {
+    const currencyCode = currencyConfig[code] ? code : 'CAD';
+    if (!currencyFormatters[currencyCode]) {
+        const meta = currencyConfig[currencyCode];
+        currencyFormatters[currencyCode] = new Intl.NumberFormat(meta.locale, {
+            style: 'currency',
+            currency: meta.currency,
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+        });
+    }
+    return currencyFormatters[currencyCode];
+}
+
+function formatRateValue(rate) {
+    const numericRate = Number.isFinite(rate) && rate > 0 ? rate : 1;
+    return numericRate.toFixed(4);
+}
+
+function sanitizeRate(value, fallback) {
+    const parsed = typeof value === 'number' ? value : parseFloat(value);
+    if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed;
+    }
+    const safeFallback = Number.isFinite(fallback) && fallback > 0 ? fallback : 1;
+    return safeFallback;
+}
+
+function ensureCurrencyRate(currencyCode) {
+    const meta = currencyConfig[currencyCode] || currencyConfig.CAD;
+    if (!currencyState.rates) {
+        currencyState.rates = {};
+    }
+    const currentRate = currencyState.rates[currencyCode];
+    if (!Number.isFinite(currentRate) || currentRate <= 0) {
+        currencyState.rates[currencyCode] = meta.defaultRate || 1;
+    }
+}
+
+function loadCurrencyState() {
+    const defaults = getDefaultCurrencyState();
+    try {
+        if (typeof localStorage === 'undefined') {
+            return defaults;
+        }
+        const stored = localStorage.getItem(CURRENCY_STORAGE_KEY);
+        if (!stored) {
+            return defaults;
+        }
+        const parsed = JSON.parse(stored);
+        const selected = currencyConfig[parsed.selected] ? parsed.selected : defaults.selected;
+        const rates = { ...defaults.rates };
+        if (parsed.rates) {
+            Object.keys(parsed.rates).forEach(code => {
+                const parsedRate = parseFloat(parsed.rates[code]);
+                if (currencyConfig[code] && Number.isFinite(parsedRate) && parsedRate > 0) {
+                    rates[code] = parsedRate;
+                }
+            });
+        }
+        return {
+            selected,
+            rates
+        };
+    } catch (error) {
+        console.warn('Unable to load currency preferences', error);
+        return defaults;
+    }
+}
+
+function saveCurrencyState() {
+    try {
+        if (typeof localStorage === 'undefined') {
+            return;
+        }
+        localStorage.setItem(CURRENCY_STORAGE_KEY, JSON.stringify(currencyState));
+    } catch (error) {
+        console.warn('Unable to save currency preferences', error);
+    }
+}
+
+function getDefaultCurrencyState() {
+    const rates = {};
+    Object.keys(currencyConfig).forEach(code => {
+        rates[code] = currencyConfig[code].defaultRate;
+    });
+    return {
+        selected: 'CAD',
+        rates
+    };
 }

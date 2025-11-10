@@ -127,61 +127,58 @@ def calculate_year_by_year_projection(
         List of year projections with net worth, savings, etc.
     """
     years_until_retirement = inputs.ideal_retirement_age - inputs.current_age
-    monthly_rate = (1 + inputs.cagr) ** (1/12) - 1
-    projections = []
+    months_until_retirement = years_until_retirement * 12
+    monthly_rate = (1 + inputs.cagr) ** (1 / 12) - 1
+    target_net_worth = calculate_target_net_worth(
+        inputs.ideal_retirement_income,
+        inputs.withdrawal_rate
+    )
     
-    # Initialize starting values
-    current_assets = inputs.current_asset_values
-    total_savings_contributed = 0.0
+    projections: List[Dict[str, Any]] = []
+    existing_assets_value = inputs.current_asset_values
+    contribution_value = 0.0
+    payout_value = 0.0
     
-    for year_offset in range(years_until_retirement + 1):
-        current_year = inputs.current_age + year_offset
-        months_elapsed = year_offset * 12
-        
-        # Project current assets
-        projected_assets = current_assets * (1 + monthly_rate) ** months_elapsed
-        
-        # Calculate savings contributions up to this point
-        if months_elapsed > 0:
-            total_savings_contributed = project_monthly_savings(
-                inputs.monthly_savings,
-                inputs.cagr,
-                months_elapsed
-            )
-        else:
-            total_savings_contributed = 0.0
-        
-        # Add payouts that occur at this age or before
-        payouts_value = 0.0
-        for payout in inputs.payouts:
-            payout_age = int(payout['year'])  # 'year' field actually stores the age
-            if payout_age <= current_year:
-                amount = float(payout['amount'])
-                months_from_payout = (current_year - payout_age) * 12
-                if months_from_payout > 0:
-                    payouts_value += amount * (1 + monthly_rate) ** months_from_payout
-                else:
-                    payouts_value += amount
-        
-        # Total projected net worth
-        total_net_worth = projected_assets + total_savings_contributed + payouts_value
-        
-        # Calculate target for this year (linear interpolation)
-        target_net_worth = calculate_target_net_worth(
-            inputs.ideal_retirement_income,
-            inputs.withdrawal_rate
-        )
-        
+    # Map each month offset to the payout amount received at that point
+    payout_schedule: Dict[int, float] = {}
+    for payout in inputs.payouts:
+        payout_age = int(payout['year'])
+        amount = float(payout['amount'])
+        months_from_start = max(0, (payout_age - inputs.current_age) * 12)
+        months_from_start = min(months_from_start, months_until_retirement)
+        payout_schedule[months_from_start] = payout_schedule.get(months_from_start, 0.0) + amount
+    
+    def append_projection(age: int) -> None:
+        total_net_worth = existing_assets_value + contribution_value + payout_value
         projections.append({
-            'year': current_year,
-            'age': current_year,
-            'current_assets': projected_assets,
-            'savings_contributions': total_savings_contributed,
-            'payouts_value': payouts_value,
+            'year': age,
+            'age': age,
+            'current_assets': existing_assets_value,
+            'savings_contributions': contribution_value,
+            'payouts_value': payout_value,
             'total_net_worth': total_net_worth,
             'target_net_worth': target_net_worth,
             'gap': total_net_worth - target_net_worth
         })
+    
+    # Initial state before any new contributions
+    append_projection(inputs.current_age)
+    
+    for month in range(1, months_until_retirement + 1):
+        if month in payout_schedule:
+            payout_value += payout_schedule[month]
+        
+        if inputs.monthly_savings > 0:
+            contribution_value += inputs.monthly_savings
+        
+        growth_multiplier = 1 + monthly_rate
+        existing_assets_value *= growth_multiplier
+        contribution_value *= growth_multiplier
+        payout_value *= growth_multiplier
+        
+        if month % 12 == 0:
+            age = inputs.current_age + (month // 12)
+            append_projection(age)
     
     return projections
 
@@ -274,4 +271,3 @@ def calculate_retirement_plan(inputs: RetirementInputs) -> Dict[str, Any]:
         'pre_tax_retirement_income': pre_tax_retirement_income,
         'inputs': inputs.to_dict()
     }
-
