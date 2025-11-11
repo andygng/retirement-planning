@@ -12,6 +12,13 @@ const currencyConfig = {
 
 const currencyFormatters = {};
 let currencyState = loadCurrencyState();
+const currencyElements = {
+    dropdown: null,
+    toggle: null,
+    menu: null,
+    label: null
+};
+let currencyMenuListenersBound = false;
 let chatHistory = [];
 let chatInitialized = false;
 let chatIsSending = false;
@@ -396,37 +403,64 @@ function populateEditForm() {
     }
     const inputs = planData.inputs;
     const currencyLabel = currencyState.selected;
+    const formattedCurrencyInputs = {
+        ideal_retirement_income: formatNumberForInput(inputs.ideal_retirement_income),
+        current_asset_values: formatNumberForInput(inputs.current_asset_values),
+        monthly_savings: formatNumberForInput(inputs.monthly_savings)
+    };
     
     form.innerHTML = `
-        <div class="form-group">
-            <label>Ideal Monthly Retirement Income (${currencyLabel})</label>
-            <input type="number" id="edit_ideal_retirement_income" value="${inputs.ideal_retirement_income ?? ''}" min="0" step="100">
-        </div>
-        <div class="form-group">
-            <label>Ideal Retirement Age</label>
-            <input type="number" id="edit_ideal_retirement_age" value="${inputs.ideal_retirement_age ?? ''}" min="1" max="100">
-        </div>
-        <div class="form-group">
-            <label>Withdrawal Rate (%)</label>
-            <input type="number" id="edit_withdrawal_rate" value="${inputs.withdrawal_rate ?? ''}" min="0.1" max="10" step="0.1">
-        </div>
-        <div class="form-group">
-            <label>Current Age</label>
-            <input type="number" id="edit_current_age" value="${inputs.current_age ?? ''}" min="1" max="100">
-        </div>
-        <div class="form-group">
-            <label>Current Asset Values (${currencyLabel})</label>
-            <input type="number" id="edit_current_asset_values" value="${inputs.current_asset_values ?? ''}" min="0" step="1000">
-        </div>
-        <div class="form-group">
-            <label>Expected Annual Growth Rate (CAGR %)</label>
-            <input type="number" id="edit_cagr" value="${inputs.cagr ?? ''}" min="-100" max="100" step="0.1">
-        </div>
-        <div class="form-group">
-            <label>Monthly Savings for Retirement (${currencyLabel})</label>
-            <input type="number" id="edit_monthly_savings" value="${inputs.monthly_savings ?? ''}" min="0" step="100">
+        <div class="edit-grid">
+            <div class="form-group">
+                <label>Ideal Monthly Retirement Income (${currencyLabel})</label>
+                <input 
+                    type="text" 
+                    id="edit_ideal_retirement_income" 
+                    value="${formattedCurrencyInputs.ideal_retirement_income}"
+                    inputmode="decimal"
+                    data-format="comma"
+                >
+            </div>
+            <div class="form-group">
+                <label>Ideal Retirement Age</label>
+                <input type="number" id="edit_ideal_retirement_age" value="${inputs.ideal_retirement_age ?? ''}" min="1" max="100">
+            </div>
+            <div class="form-group">
+                <label>Withdrawal Rate (%)</label>
+                <input type="number" id="edit_withdrawal_rate" value="${inputs.withdrawal_rate ?? ''}" min="0.1" max="10" step="0.1">
+            </div>
+            <div class="form-group">
+                <label>Current Age</label>
+                <input type="number" id="edit_current_age" value="${inputs.current_age ?? ''}" min="1" max="100">
+            </div>
+            <div class="form-group">
+                <label>Current Asset Values (${currencyLabel})</label>
+                <input 
+                    type="text" 
+                    id="edit_current_asset_values" 
+                    value="${formattedCurrencyInputs.current_asset_values}"
+                    inputmode="decimal"
+                    data-format="comma"
+                >
+            </div>
+            <div class="form-group">
+                <label>Expected Annual Growth Rate (CAGR %)</label>
+                <input type="number" id="edit_cagr" value="${inputs.cagr ?? ''}" min="-100" max="100" step="0.1">
+            </div>
+            <div class="form-group">
+                <label>Monthly Savings for Retirement (${currencyLabel})</label>
+                <input 
+                    type="text" 
+                    id="edit_monthly_savings" 
+                    value="${formattedCurrencyInputs.monthly_savings}"
+                    inputmode="decimal"
+                    data-format="comma"
+                >
+            </div>
         </div>
     `;
+    
+    setupCommaFormatting(form);
 }
 
 function openEditModal(event) {
@@ -449,13 +483,13 @@ function saveAndRecalculate() {
         return;
     }
     const inputs = {
-        ideal_retirement_income: parseFloat(document.getElementById('edit_ideal_retirement_income').value),
+        ideal_retirement_income: parseFloat(getSanitizedInputValue('edit_ideal_retirement_income')),
         ideal_retirement_age: parseInt(document.getElementById('edit_ideal_retirement_age').value),
         withdrawal_rate: parseFloat(document.getElementById('edit_withdrawal_rate').value),
         current_age: parseInt(document.getElementById('edit_current_age').value),
-        current_asset_values: parseFloat(document.getElementById('edit_current_asset_values').value),
+        current_asset_values: parseFloat(getSanitizedInputValue('edit_current_asset_values')),
         cagr: parseFloat(document.getElementById('edit_cagr').value),
-        monthly_savings: parseFloat(document.getElementById('edit_monthly_savings').value),
+        monthly_savings: parseFloat(getSanitizedInputValue('edit_monthly_savings')),
         payouts: Array.isArray(planData.inputs.payouts) ? planData.inputs.payouts.map(payout => ({ ...payout })) : []
     };
     const normalizedInputs = convertInputsToBaseCurrency(inputs);
@@ -509,6 +543,58 @@ function formatCurrencyShort(amount) {
         return `${sign}${symbol}${(absolute / 1000).toFixed(0)}K`;
     }
     return `${sign}${symbol}${absolute.toFixed(0)}`;
+}
+
+function formatNumberForInput(value) {
+    if (value === undefined || value === null || value === '') {
+        return '';
+    }
+    const numeric = typeof value === 'number' ? value : parseFloat(value);
+    if (!Number.isFinite(numeric)) {
+        return '';
+    }
+    const [integerPartRaw, decimalPart] = numeric.toString().split('.');
+    const integerPart = integerPartRaw.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    return decimalPart !== undefined ? `${integerPart}.${decimalPart}` : integerPart;
+}
+
+function sanitizeNumberInput(value) {
+    if (value === undefined || value === null) {
+        return '';
+    }
+    return value.toString().replace(/,/g, '').trim();
+}
+
+function setupCommaFormatting(container) {
+    if (!container) {
+        return;
+    }
+    const inputs = container.querySelectorAll('input[data-format="comma"]');
+    inputs.forEach(input => {
+        input.addEventListener('focus', () => {
+            input.value = sanitizeNumberInput(input.value);
+        });
+        input.addEventListener('blur', () => {
+            const sanitized = sanitizeNumberInput(input.value);
+            if (sanitized === '' || Number.isNaN(Number(sanitized))) {
+                input.value = '';
+                return;
+            }
+            input.value = formatNumberForInput(sanitized);
+        });
+        const initialValue = sanitizeNumberInput(input.value);
+        if (initialValue !== '') {
+            input.value = formatNumberForInput(initialValue);
+        }
+    });
+}
+
+function getSanitizedInputValue(id) {
+    const element = document.getElementById(id);
+    if (!element) {
+        return '';
+    }
+    return sanitizeNumberInput(element.value);
 }
 
 function initializeChatAssistant() {
@@ -759,6 +845,11 @@ function escapeHtml(str) {
 }
 
 function initializeCurrencyControls() {
+    currencyElements.dropdown = document.getElementById('currencyDropdown');
+    currencyElements.toggle = document.getElementById('currencyToggle');
+    currencyElements.menu = document.getElementById('currencyMenu');
+    currencyElements.label = document.getElementById('currencyToggleLabel');
+    
     ensureCurrencyRate(currencyState.selected);
     updateCurrencyRateUI();
     
@@ -776,6 +867,7 @@ function initializeCurrencyControls() {
             saveCurrencyState();
             updateCurrencyRateUI();
             refreshDashboardAfterCurrencyChange();
+            setCurrencyMenuState(false);
         });
     }
     
@@ -788,12 +880,27 @@ function initializeCurrencyControls() {
             refreshDashboardAfterCurrencyChange();
         });
     }
+    
+    if (currencyElements.toggle && currencyElements.dropdown) {
+        currencyElements.toggle.addEventListener('click', (event) => {
+            event.preventDefault();
+            const isOpen = currencyElements.dropdown.classList.contains('open');
+            setCurrencyMenuState(!isOpen);
+        });
+    }
+    
+    if (!currencyMenuListenersBound) {
+        document.addEventListener('click', handleCurrencyMenuOutsideClick);
+        document.addEventListener('keydown', handleCurrencyMenuKeydown);
+        currencyMenuListenersBound = true;
+    }
 }
 
 function updateCurrencyRateUI() {
     const selector = document.getElementById('currencySelector');
     const rateInput = document.getElementById('currencyRateInput');
     const rateSuffix = document.getElementById('currencyRateSuffix');
+    const toggleLabel = currencyElements.label || document.getElementById('currencyToggleLabel');
     const rate = getCurrentCurrencyRate();
     
     if (selector && selector.value !== currencyState.selected) {
@@ -804,6 +911,10 @@ function updateCurrencyRateUI() {
     }
     if (rateSuffix) {
         rateSuffix.textContent = currencyState.selected;
+    }
+    if (toggleLabel) {
+        toggleLabel.textContent = currencyState.selected;
+        currencyElements.label = toggleLabel;
     }
 }
 
@@ -951,16 +1062,16 @@ function getCurrencyFormatter(code) {
 
 function formatRateValue(rate) {
     const numericRate = Number.isFinite(rate) && rate > 0 ? rate : 1;
-    return numericRate.toFixed(4);
+    return numericRate.toFixed(2);
 }
 
 function sanitizeRate(value, fallback) {
     const parsed = typeof value === 'number' ? value : parseFloat(value);
     if (Number.isFinite(parsed) && parsed > 0) {
-        return parsed;
+        return parseFloat(parsed.toFixed(2));
     }
     const safeFallback = Number.isFinite(fallback) && fallback > 0 ? fallback : 1;
-    return safeFallback;
+    return parseFloat(safeFallback.toFixed(2));
 }
 
 function ensureCurrencyRate(currencyCode) {
@@ -1025,4 +1136,39 @@ function getDefaultCurrencyState() {
         selected: 'CAD',
         rates
     };
+}
+
+function setCurrencyMenuState(isOpen) {
+    const dropdown = currencyElements.dropdown;
+    const menu = currencyElements.menu;
+    const toggle = currencyElements.toggle;
+    if (!dropdown || !menu || !toggle) {
+        return;
+    }
+    if (isOpen) {
+        dropdown.classList.add('open');
+        toggle.setAttribute('aria-expanded', 'true');
+        menu.setAttribute('aria-hidden', 'false');
+    } else {
+        dropdown.classList.remove('open');
+        toggle.setAttribute('aria-expanded', 'false');
+        menu.setAttribute('aria-hidden', 'true');
+    }
+}
+
+function handleCurrencyMenuOutsideClick(event) {
+    const dropdown = currencyElements.dropdown;
+    if (!dropdown || !dropdown.classList.contains('open')) {
+        return;
+    }
+    if (dropdown.contains(event.target)) {
+        return;
+    }
+    setCurrencyMenuState(false);
+}
+
+function handleCurrencyMenuKeydown(event) {
+    if (event.key === 'Escape') {
+        setCurrencyMenuState(false);
+    }
 }
