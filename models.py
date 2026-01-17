@@ -113,6 +113,8 @@ def validate_inputs(data: Dict[str, Any]) -> List[str]:
                         payout_age = int(payout['year'])  # 'year' field stores the age
                         if payout_age <= current_age:
                             errors.append(f"Payout {i+1} age must be after current age")
+                        if payout_age > ideal_retirement_age:
+                            errors.append(f"Payout {i+1} age must be on or before ideal retirement age")
     
     except (ValueError, TypeError) as e:
         errors.append(f"Invalid numeric value: {str(e)}")
