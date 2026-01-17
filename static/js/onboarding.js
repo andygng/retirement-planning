@@ -1,6 +1,7 @@
 // Onboarding flow state
 let currentQuestionIndex = 0;
 let answers = {};
+let pendingErrorMessage = '';
 
 // Question definitions
 const questions = [
@@ -262,6 +263,13 @@ function renderQuestion(index) {
     }
     
     questionDiv.innerHTML = html;
+    if (pendingErrorMessage) {
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'question-error';
+        errorDiv.textContent = pendingErrorMessage;
+        questionDiv.insertBefore(errorDiv, questionDiv.querySelector('.question-body'));
+        pendingErrorMessage = '';
+    }
     
     const mountQuestion = () => {
         container.appendChild(questionDiv);
@@ -584,6 +592,16 @@ function submitAnswers() {
         cancelDashboardTransition();
         const container = document.querySelector('.question-container');
         const errorMessage = typeof error === 'string' ? error : (error.message || 'An unknown error occurred');
+        const isPayoutAgeError = /payout/i.test(errorMessage) && /retirement age/i.test(errorMessage);
+        if (isPayoutAgeError) {
+            pendingErrorMessage = 'One or more payouts are scheduled after your retirement age. Please update those payout ages to be on or before your retirement age.';
+            const payoutIndex = questions.findIndex(question => question.id === 'payouts');
+            if (payoutIndex !== -1) {
+                currentQuestionIndex = payoutIndex;
+                renderQuestion(currentQuestionIndex);
+                return;
+            }
+        }
         if (container) {
             container.innerHTML = `
                 <div class="transition-error">
