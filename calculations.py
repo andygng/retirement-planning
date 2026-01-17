@@ -71,12 +71,13 @@ def project_monthly_savings(
     
     monthly_rate = (1 + cagr) ** (1/12) - 1
     
-    # Future value of annuity formula
-    # FV = PMT * (((1 + r)^n - 1) / r)
+    # Future value of annuity due formula (contributions at beginning of month)
+    # FV = PMT * (((1 + r)^n - 1) / r) * (1 + r)
     if monthly_rate == 0:
         return monthly_savings * months_until_retirement
     else:
-        return monthly_savings * (((1 + monthly_rate) ** months_until_retirement - 1) / monthly_rate)
+        annuity_factor = ((1 + monthly_rate) ** months_until_retirement - 1) / monthly_rate
+        return monthly_savings * annuity_factor * (1 + monthly_rate)
 
 def project_payouts(
     payouts: List[Dict[str, Any]],
@@ -239,8 +240,9 @@ def calculate_retirement_plan(inputs: RetirementInputs) -> Dict[str, Any]:
         # Reverse the savings projection to find required monthly amount
         monthly_rate = (1 + inputs.cagr) ** (1/12) - 1
         if monthly_rate > 0:
-            # PMT = FV * (r / ((1 + r)^n - 1))
-            required_monthly_savings = shortfall * (monthly_rate / ((1 + monthly_rate) ** months_until_retirement - 1))
+            # PMT (annuity due) = FV * (r / ((1 + r)^n - 1)) / (1 + r)
+            denominator = (1 + monthly_rate) * ((1 + monthly_rate) ** months_until_retirement - 1)
+            required_monthly_savings = shortfall * (monthly_rate / denominator)
         else:
             required_monthly_savings = shortfall / months_until_retirement
         required_monthly_savings += inputs.monthly_savings
