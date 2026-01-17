@@ -144,10 +144,12 @@ def calculate_year_by_year_projection(
     payout_schedule: Dict[int, float] = {}
     for payout in inputs.payouts:
         payout_age = int(payout['year'])
+        if payout_age > inputs.ideal_retirement_age:
+            continue
         amount = float(payout['amount'])
-        months_from_start = max(0, (payout_age - inputs.current_age) * 12)
-        months_from_start = min(months_from_start, months_until_retirement)
-        payout_schedule[months_from_start] = payout_schedule.get(months_from_start, 0.0) + amount
+        months_from_start = (payout_age - inputs.current_age) * 12
+        if 0 <= months_from_start <= months_until_retirement:
+            payout_schedule[months_from_start] = payout_schedule.get(months_from_start, 0.0) + amount
     
     def append_projection(age: int) -> None:
         total_net_worth = existing_assets_value + contribution_value + payout_value
