@@ -37,18 +37,19 @@ def calculate_tax(income: float, brackets: list, basic_personal_amount: float) -
     Returns:
         Total tax payable
     """
-    taxable_income = max(0, income - basic_personal_amount)
-    if taxable_income <= 0:
+    if income <= 0:
         return 0
     
     tax = 0
     for min_income, max_income, rate in brackets:
-        if taxable_income <= min_income:
+        if income <= min_income:
             break
-        bracket_income = min(taxable_income, max_income) - min_income
+        bracket_income = min(income, max_income) - min_income
         tax += bracket_income * rate
     
-    return tax
+    lowest_rate = brackets[0][2]
+    basic_personal_credit = basic_personal_amount * lowest_rate
+    return max(0, tax - basic_personal_credit)
 
 def calculate_canadian_tax_rate(annual_income: float) -> float:
     """
@@ -120,4 +121,3 @@ def calculate_pre_tax_income_needed(after_tax_income: float) -> float:
         guess += difference / (1 - calculate_canadian_tax_rate(guess))
     
     return guess
-
