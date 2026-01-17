@@ -506,8 +506,18 @@ function saveAndRecalculate() {
         },
         body: JSON.stringify(normalizedInputs)
     })
-    .then(response => response.json())
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => {
+                throw new Error(err.error || 'Server error');
+            });
+        }
+        return response.json();
+    })
     .then(result => {
+        if (result.error) {
+            throw new Error(result.error);
+        }
         basePlanData = result;
         sessionStorage.setItem('retirementPlan', JSON.stringify(result));
         refreshDashboardAfterCurrencyChange();
@@ -517,7 +527,8 @@ function saveAndRecalculate() {
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('Error recalculating. Please try again.');
+        const message = typeof error === 'string' ? error : (error.message || 'An unknown error occurred');
+        alert(`We couldn’t update your plan. ${message} Please try again.`);
         renderDashboard();
     });
 }
