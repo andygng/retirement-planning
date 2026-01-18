@@ -741,8 +741,9 @@ function handleChatSubmit(event) {
             addChatMessage('assistant', result.response);
             setChatStatus('');
         } else {
-            const errorMessage = result.error || 'Something went wrong.';
-            addChatMessage('error', errorMessage);
+            const baseMessage = result.error || 'Something went wrong.';
+            const details = result.details ? ` (${result.details})` : '';
+            addChatMessage('error', `${baseMessage}${details}`);
             setChatStatus('Unable to get a reply.');
         }
     })

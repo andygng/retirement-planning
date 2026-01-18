@@ -78,16 +78,18 @@ def chat():
             "Highlight trade-offs, maintain a calm tone, and reference exact figures if available."
         )
         
-        completion = client.chat.completions.create(
+        response = client.responses.create(
             model='gpt-5',
             temperature=0.2,
-            messages=[
+            input=[
                 {'role': 'system', 'content': system_prompt},
                 {'role': 'user', 'content': user_prompt}
             ],
         )
-        
-        answer = completion.choices[0].message.content.strip()
+
+        answer = (response.output_text or '').strip()
+        if not answer:
+            return jsonify({'error': 'No response content received from the assistant.'}), 502
         return jsonify({'response': answer})
     except RuntimeError as err:
         return jsonify({'error': str(err)}), 500
