@@ -8,6 +8,16 @@ from models import validate_inputs, RetirementInputs
 
 app = Flask(__name__)
 
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
+
+if load_dotenv:
+    load_dotenv()
+
+OPENAI_MODEL = os.environ.get('OPENAI_MODEL', 'gpt-5.2')
+
 def get_openai_client():
     """Create an OpenAI client if the API key is configured."""
     api_key = os.environ.get('OPENAI_API_KEY')
@@ -79,7 +89,7 @@ def chat():
         )
         
         completion = client.chat.completions.create(
-            model='gpt-5',
+            model=OPENAI_MODEL,
             temperature=0.2,
             messages=[
                 {'role': 'system', 'content': system_prompt},
@@ -92,7 +102,23 @@ def chat():
     except RuntimeError as err:
         return jsonify({'error': str(err)}), 500
     except Exception as exc:
-        return jsonify({'error': 'Unable to complete chat request.', 'details': str(exc)}), 500
+        app.logger.exception('Chat request failed')
+        if app.debug or os.environ.get('FLASK_ENV') == 'development':
+            return jsonify({'error': 'Unable to complete chat request.', 'details': str(exc)}), 500
+        return jsonify({'error': 'Unable to complete chat request.'}), 500
+
+@app.route('/api/chat/health', methods=['GET'])
+def chat_health():
+    """Lightweight health check for OpenAI connectivity."""
+    try:
+        client = get_openai_client()
+        client.models.list()
+        return jsonify({'ok': True, 'model': OPENAI_MODEL})
+    except Exception as exc:
+        app.logger.exception('Chat health check failed')
+        if app.debug or os.environ.get('FLASK_ENV') == 'development':
+            return jsonify({'ok': False, 'error': str(exc)}), 500
+        return jsonify({'ok': False, 'error': 'Chat health check failed.'}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=5001)

@@ -743,6 +743,9 @@ function handleChatSubmit(event) {
         } else {
             const errorMessage = result.error || 'Something went wrong.';
             addChatMessage('error', errorMessage);
+            if (result.details) {
+                console.warn('Chat error details:', result.details);
+            }
             setChatStatus('Unable to get a reply.');
         }
     })
