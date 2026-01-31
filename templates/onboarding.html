@@ -1,28 +1,35 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Retirement Planning - Onboarding</title>
+    <meta name="description" content="Answer a few questions to create your personalized retirement plan.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/onboarding.css') }}">
 </head>
+
 <body>
     <div class="onboarding-container">
         <div class="progress-bar">
             <div class="progress-fill" id="progressFill"></div>
         </div>
         <div class="progress-text" id="progressText">Question 1 of 10</div>
-        
+
         <div class="question-container" id="questionContainer">
             <!-- Questions will be dynamically inserted here -->
         </div>
-        
+
         <div class="navigation">
             <button class="btn btn-back" id="backBtn" style="display: none;">← Back</button>
         </div>
     </div>
-    
+
     <script src="{{ url_for('static', filename='js/onboarding.js') }}"></script>
 </body>
-</html>
 
+</html>

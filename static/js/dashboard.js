@@ -38,7 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
         window.location.href = '/';
         return;
     }
-    
+
     // Edit button
     const editBtn = document.getElementById('editBtn');
     if (editBtn) {
@@ -56,7 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (saveEditBtn) {
         saveEditBtn.addEventListener('click', saveAndRecalculate);
     }
-    
+
     // Restart button
     const restartBtn = document.getElementById('restartBtn');
     if (restartBtn) {
@@ -72,14 +72,15 @@ function renderDashboard() {
     if (!container || !planData) {
         return;
     }
-    
+
     let html = `
         <div class="summary-cards">
             ${renderSummaryCard('Target Net Worth', formatCurrency(planData.target_net_worth), 'Required at retirement')}
             ${renderSummaryCard('Projected Net Worth', formatCurrency(planData.total_projected_net_worth), `In ${planData.years_until_retirement} years`)}
             ${renderSummaryCard('Gap', formatCurrency(planData.gap), planData.gap >= 0 ? 'Surplus' : 'Shortfall', planData.gap >= 0 ? 'positive' : 'negative')}
-            ${renderSummaryCard('Current Monthly Savings', formatCurrency(planData.current_monthly_savings), 'Your current rate')}
         </div>
+        
+        ${renderKPICards()}
         
         <div class="charts-section">
             <div class="chart-container">
@@ -89,26 +90,21 @@ function renderDashboard() {
                 </div>
             </div>
             <div class="chart-container">
-                <h2>Progress Over Time</h2>
-                <div class="chart-wrapper">
-                    <canvas id="progressChart"></canvas>
+                <h2>Wealth Breakdown at Retirement</h2>
+                <div class="chart-wrapper chart-wrapper-donut">
+                    <canvas id="breakdownChart"></canvas>
                 </div>
             </div>
         </div>
         
         <div class="commentary-section">
-            <h2>Analysis & Recommendations</h2>
+            <h2>Key Insights</h2>
             ${generateCommentary()}
         </div>
-        
-        <div class="table-section">
-            <h2>Year-by-Year Projection</h2>
-            ${renderProjectionTable()}
-        </div>
     `;
-    
+
     container.innerHTML = html;
-    
+
     // Render charts
     renderCharts();
 }
@@ -123,6 +119,45 @@ function renderSummaryCard(title, value, subtitle, valueClass = '') {
     `;
 }
 
+function renderKPICards() {
+    if (!planData) return '';
+
+    // Calculate additional savings needed if any
+    const monthlyGap = planData.required_monthly_savings - planData.current_monthly_savings;
+    const isShortfall = planData.gap < 0;
+
+    return `
+        <div class="kpi-cards">
+            <div class="kpi-card">
+                <div class="kpi-icon">⏳</div>
+                <div class="kpi-content">
+                    <div class="kpi-label">Time to Retirement</div>
+                    <div class="kpi-value">${planData.years_until_retirement} Years</div>
+                    <div class="kpi-sub">Age ${planData.inputs.current_age} → ${planData.inputs.ideal_retirement_age}</div>
+                </div>
+            </div>
+            
+            <div class="kpi-card">
+                <div class="kpi-icon">🏦</div>
+                <div class="kpi-content">
+                    <div class="kpi-label">Effective Tax Rate</div>
+                    <div class="kpi-value">${planData.retirement_tax_rate.toFixed(1)}%</div>
+                    <div class="kpi-sub">Estimated in retirement</div>
+                </div>
+            </div>
+            
+            <div class="kpi-card ${isShortfall ? 'highlight-warning' : ''}">
+                <div class="kpi-icon">${isShortfall ? '⚠️' : '✅'}</div>
+                <div class="kpi-content">
+                    <div class="kpi-label">${isShortfall ? 'Savings Shortfall' : 'Savings Status'}</div>
+                    <div class="kpi-value">${isShortfall ? formatCurrencyShort(monthlyGap) + '/mo' : 'On Track'}</div>
+                    <div class="kpi-sub">${isShortfall ? 'Additional needed' : 'Current plan sufficient'}</div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
 function renderCharts() {
     if (!planData || !Array.isArray(planData.year_by_year)) {
         return;
@@ -131,7 +166,7 @@ function renderCharts() {
     const years = yearByYear.map(y => y.year);
     const projected = yearByYear.map(y => y.total_net_worth);
     const target = yearByYear.map(y => y.target_net_worth);
-    
+
     // Net Worth Projection Chart
     const netWorthCtx = document.getElementById('netWorthChart').getContext('2d');
     if (charts.netWorth) {
@@ -154,10 +189,11 @@ function renderCharts() {
                     label: 'Target Net Worth',
                     data: target,
                     borderColor: '#10b981',
-                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    backgroundColor: 'rgba(16, 185, 129, 0.05)',
                     fill: true,
                     borderDash: [5, 5],
-                    tension: 0.4
+                    tension: 0.4,
+                    pointRadius: 0
                 }
             ]
         },
@@ -167,45 +203,76 @@ function renderCharts() {
             plugins: {
                 legend: {
                     display: true,
-                    position: 'top'
+                    position: 'top',
+                    align: 'end',
+                    labels: {
+                        boxWidth: 10,
+                        usePointStyle: true
+                    }
                 },
                 tooltip: {
+                    mode: 'index',
+                    intersect: false,
                     callbacks: {
-                        label: function(context) {
+                        label: function (context) {
                             return context.dataset.label + ': ' + formatCurrency(context.parsed.y);
                         }
                     }
                 }
             },
+            interaction: {
+                mode: 'nearest',
+                axis: 'x',
+                intersect: false
+            },
             scales: {
                 y: {
                     beginAtZero: true,
+                    grid: {
+                        borderDash: [2, 4],
+                        color: 'rgba(0, 0, 0, 0.05)'
+                    },
                     ticks: {
-                        callback: function(value) {
+                        callback: function (value) {
                             return formatCurrencyShort(value);
                         }
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
                     }
                 }
             }
         }
     });
-    
-    // Progress Chart (Gap over time)
-    const progressCtx = document.getElementById('progressChart').getContext('2d');
-    if (charts.progress) {
-        charts.progress.destroy();
+
+    // Wealth Breakdown Donut Chart
+    const breakdownCtx = document.getElementById('breakdownChart').getContext('2d');
+    if (charts.breakdown) {
+        charts.breakdown.destroy();
     }
-    const gaps = yearByYear.map(y => y.gap);
-    charts.progress = new Chart(progressCtx, {
-        type: 'bar',
+
+    // Prepare data for donut
+    const breakdownData = [
+        Math.max(0, planData.projected_current_assets),
+        Math.max(0, planData.projected_savings),
+        Math.max(0, planData.projected_payouts)
+    ];
+
+    charts.breakdown = new Chart(breakdownCtx, {
+        type: 'doughnut',
         data: {
-            labels: years,
+            labels: ['Current Assets Growth', 'Future Savings', 'One-time Payouts'],
             datasets: [{
-                label: 'Gap (Projected - Target)',
-                data: gaps,
-                backgroundColor: gaps.map(g => g >= 0 ? 'rgba(16, 185, 129, 0.6)' : 'rgba(239, 68, 68, 0.6)'),
-                borderColor: gaps.map(g => g >= 0 ? '#10b981' : '#ef4444'),
-                borderWidth: 1
+                data: breakdownData,
+                backgroundColor: [
+                    'rgba(102, 126, 234, 0.8)',
+                    'rgba(16, 185, 129, 0.8)',
+                    'rgba(245, 158, 11, 0.8)'
+                ],
+                borderWidth: 0,
+                hoverOffset: 4
             }]
         },
         options: {
@@ -213,186 +280,67 @@ function renderCharts() {
             maintainAspectRatio: false,
             plugins: {
                 legend: {
-                    display: false
+                    position: 'right',
+                    labels: {
+                        boxWidth: 12,
+                        padding: 15,
+                        font: {
+                            family: "'Space Grotesk', sans-serif",
+                            size: 11
+                        }
+                    }
                 },
                 tooltip: {
                     callbacks: {
-                        label: function(context) {
-                            return 'Gap: ' + formatCurrency(context.parsed.y);
+                        label: function (context) {
+                            const value = context.parsed;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                            return `${context.label}: ${formatCurrencyShort(value)} (${percentage}%)`;
                         }
                     }
                 }
             },
-            scales: {
-                y: {
-                    ticks: {
-                        callback: function(value) {
-                            return formatCurrencyShort(value);
-                        }
-                    }
-                }
-            }
+            cutout: '70%'
         }
     });
 }
 
 function generateCommentary() {
-    if (!planData || !planData.inputs) {
-        return '';
-    }
-    const gap = planData.gap;
-    const gapPercentage = planData.gap_percentage;
-    const requiredSavings = planData.required_monthly_savings;
-    const currentSavings = planData.current_monthly_savings;
-    const yearsUntilRetirement = planData.years_until_retirement;
-    
-    let html = '';
-    
-    // Current Status
-    html += `
-        <div class="commentary-item">
-            <h3>Current Status</h3>
-            <p>
-                Based on your current financial situation, you are projected to have 
-                <strong>${formatCurrency(planData.total_projected_net_worth)}</strong> at retirement age ${planData.inputs.ideal_retirement_age}, 
-                which is <strong>${formatCurrency(Math.abs(gap))}</strong> 
-                ${gap >= 0 ? 'more than' : 'less than'} your target of 
-                <strong>${formatCurrency(planData.target_net_worth)}</strong>.
-            </p>
-        </div>
-    `;
-    
-    // Gap Analysis
-    if (gap < 0) {
-        const shortfall = Math.abs(gap);
-        const additionalMonthly = requiredSavings - currentSavings;
-        
-        html += `
-            <div class="commentary-item">
-                <h3>Gap Analysis</h3>
-                <p>
-                    You have a shortfall of <strong>${formatCurrency(shortfall)}</strong> 
-                    (${Math.abs(gapPercentage).toFixed(1)}% below target). To close this gap, you need to:
-                </p>
-                <ul>
-                    <li>Increase your monthly savings from ${formatCurrency(currentSavings)} to 
-                        <strong>${formatCurrency(requiredSavings)}</strong> 
-                        (an additional ${formatCurrency(additionalMonthly)} per month)</li>
-                    <li>Or reduce your retirement income goal by approximately 
-                        ${formatCurrency(planData.inputs.ideal_retirement_income * Math.abs(gapPercentage) / 100)} per month</li>
-                    <li>Or delay retirement by a few years to allow more time for growth</li>
-                </ul>
-            </div>
-        `;
-    } else {
-        html += `
-            <div class="commentary-item">
-                <h3>Gap Analysis</h3>
-                <p>
-                    Great news! You're on track to exceed your retirement goal by 
-                    <strong>${formatCurrency(gap)}</strong> (${gapPercentage.toFixed(1)}% above target). 
-                    You may consider:
-                </p>
-                <ul>
-                    <li>Retiring earlier than planned</li>
-                    <li>Increasing your retirement lifestyle goals</li>
-                    <li>Reducing your current savings rate if desired</li>
-                </ul>
-            </div>
-        `;
-    }
-    
-    // Recommendations
-    html += `
-        <div class="commentary-item">
-            <h3>Recommendations</h3>
-            <p>Based on your plan, here are some actionable steps:</p>
-            <ul>
-                ${gap < 0 ? `
-                    <li><strong>Increase Savings:</strong> Try to save an additional 
-                        ${formatCurrency(requiredSavings - currentSavings)} per month. 
-                        This could come from reducing expenses or increasing income.</li>
-                    <li><strong>Review Expenses:</strong> Look for opportunities to reduce discretionary spending 
-                        and redirect those funds to retirement savings.</li>
-                    <li><strong>Consider Side Income:</strong> Additional income streams can significantly 
-                        accelerate your retirement savings.</li>
-                ` : `
-                    <li><strong>Maintain Current Savings Rate:</strong> You're on track! Continue saving at your 
-                        current rate of ${formatCurrency(currentSavings)} per month.</li>
-                    <li><strong>Consider Early Retirement:</strong> With your current trajectory, you may be able 
-                        to retire earlier than planned.</li>
-                `}
-                <li><strong>Review Annually:</strong> Revisit this plan annually to adjust for changes in income, 
-                    expenses, or goals.</li>
-                <li><strong>Diversify Investments:</strong> Ensure your portfolio is well-diversified to achieve 
-                    your assumed ${Number(planData.inputs.cagr).toFixed(1)}% annual growth rate.</li>
-            </ul>
-        </div>
-    `;
-    
-    // Assumptions
-    html += `
-        <div class="commentary-item">
-            <h3>Important Assumptions</h3>
-            <p>This plan is based on the following assumptions:</p>
-            <ul>
-                <li>Annual growth rate (CAGR) of ${Number(planData.inputs.cagr).toFixed(1)}%</li>
-                <li>Withdrawal rate of ${Number(planData.inputs.withdrawal_rate).toFixed(1)}% annually</li>
-                <li>Canadian tax rates applied to retirement income (effective rate: ${planData.retirement_tax_rate.toFixed(1)}%)</li>
-                <li>Monthly savings contributions invested immediately</li>
-                <li>All investments compound monthly</li>
-            </ul>
-            <p style="margin-top: 12px; color: #999; font-size: 14px;">
-                <em>Note: Actual results may vary based on market conditions, tax law changes, and other factors. 
-                This is a projection tool and should not be considered as financial advice.</em>
-            </p>
-        </div>
-    `;
-    
-    return html;
-}
+    if (!planData || !planData.inputs) return '';
 
-function renderProjectionTable() {
-    if (!planData || !Array.isArray(planData.year_by_year)) {
-        return '';
-    }
-    const yearByYear = planData.year_by_year;
-    
+    const gap = planData.gap;
+    const isSurplus = gap >= 0;
+    const monthlyGap = planData.required_monthly_savings - planData.current_monthly_savings;
+
     let html = `
-        <table>
-            <thead>
-                <tr>
-                    <th>Age</th>
-                    <th class="number">Current Assets</th>
-                    <th class="number">Savings Growth</th>
-                    <th class="number">Payouts</th>
-                    <th class="number">Total Net Worth</th>
-                    <th class="number">Target</th>
-                    <th class="number">Gap</th>
-                </tr>
-            </thead>
-            <tbody>
+        <div class="insights-grid">
+            <div class="insight-item">
+                <h3>📉 The Bottom Line</h3>
+                <p>
+                    ${isSurplus
+            ? `You are projected to have <strong>${formatCurrency(Math.abs(gap))} surplus</strong> above your target.`
+            : `You have a projected shortfall of <strong>${formatCurrency(Math.abs(gap))}</strong>.`}
+                </p>
+            </div>
+            
+            <div class="insight-item">
+                <h3>💡 Recommendation</h3>
+                <p>
+                    ${isSurplus
+            ? "Consider retiring earlier or increasing your lifestyle budget."
+            : `Try to increase monthly savings by <strong>${formatCurrency(monthlyGap)}</strong> or retire ${Math.ceil(monthlyGap / 1000)} years later.`}
+                </p>
+            </div>
+            
+            <div class="insight-item">
+                <h3>🔧 Key Assumptions</h3>
+                <p class="compact-text">
+                    ${Number(planData.inputs.cagr).toFixed(1)}% Growth • ${Number(planData.inputs.withdrawal_rate).toFixed(1)}% Withdrawal Rate
+                </p>
+            </div>
+        </div>
     `;
-    
-    yearByYear.forEach(year => {
-        html += `
-            <tr>
-                <td>${year.age}</td>
-                <td class="number">${formatCurrency(year.current_assets)}</td>
-                <td class="number">${formatCurrency(year.savings_contributions)}</td>
-                <td class="number">${formatCurrency(year.payouts_value)}</td>
-                <td class="number">${formatCurrency(year.total_net_worth)}</td>
-                <td class="number">${formatCurrency(year.target_net_worth)}</td>
-                <td class="number ${year.gap >= 0 ? 'positive' : 'negative'}">${formatCurrency(year.gap)}</td>
-            </tr>
-        `;
-    });
-    
-    html += `
-            </tbody>
-        </table>
-    `;
-    
     return html;
 }
 
@@ -408,7 +356,7 @@ function populateEditForm() {
         current_asset_values: formatNumberForInput(inputs.current_asset_values),
         monthly_savings: formatNumberForInput(inputs.monthly_savings)
     };
-    
+
     form.innerHTML = `
         <div class="edit-grid">
             <div class="form-group">
@@ -459,7 +407,7 @@ function populateEditForm() {
             </div>
         </div>
     `;
-    
+
     setupCommaFormatting(form);
 }
 
@@ -493,11 +441,11 @@ function saveAndRecalculate() {
         payouts: Array.isArray(planData.inputs.payouts) ? planData.inputs.payouts.map(payout => ({ ...payout })) : []
     };
     const normalizedInputs = convertInputsToBaseCurrency(inputs);
-    
+
     // Show loading
     document.getElementById('dashboardContent').innerHTML = '<div class="loading">Recalculating...</div>';
     closeEditModal();
-    
+
     // Recalculate
     fetch('/api/calculate', {
         method: 'POST',
@@ -506,31 +454,31 @@ function saveAndRecalculate() {
         },
         body: JSON.stringify(normalizedInputs)
     })
-    .then(response => {
-        if (!response.ok) {
-            return response.json().then(err => {
-                throw new Error(err.error || 'Server error');
-            });
-        }
-        return response.json();
-    })
-    .then(result => {
-        if (result.error) {
-            throw new Error(result.error);
-        }
-        basePlanData = result;
-        sessionStorage.setItem('retirementPlan', JSON.stringify(result));
-        refreshDashboardAfterCurrencyChange();
-        if (chatInitialized) {
-            setChatStatus('Plan updated. Ask what changed.');
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        const message = typeof error === 'string' ? error : (error.message || 'An unknown error occurred');
-        alert(`We couldn’t update your plan. ${message} Please try again.`);
-        renderDashboard();
-    });
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => {
+                    throw new Error(err.error || 'Server error');
+                });
+            }
+            return response.json();
+        })
+        .then(result => {
+            if (result.error) {
+                throw new Error(result.error);
+            }
+            basePlanData = result;
+            sessionStorage.setItem('retirementPlan', JSON.stringify(result));
+            refreshDashboardAfterCurrencyChange();
+            if (chatInitialized) {
+                setChatStatus('Plan updated. Ask what changed.');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            const message = typeof error === 'string' ? error : (error.message || 'An unknown error occurred');
+            alert(`We couldn’t update your plan. ${message} Please try again.`);
+            renderDashboard();
+        });
 }
 
 function formatCurrency(amount) {
@@ -547,9 +495,9 @@ function formatCurrencyShort(amount) {
     const absolute = Math.abs(value);
     const meta = currencyConfig[currencyState.selected] || currencyConfig.CAD;
     const symbol = meta.shortSymbol || meta.currency || '$';
-    
+
     if (absolute >= 1000000) {
-        return `${sign}${symbol}${(absolute / 1000000).toFixed(1)}M`;
+        return `${sign}${symbol}${(absolute / 1000000).toFixed(0)}M`;
     } else if (absolute >= 1000) {
         return `${sign}${symbol}${(absolute / 1000).toFixed(0)}K`;
     }
@@ -612,7 +560,7 @@ function initializeChatAssistant() {
     if (chatInitialized) {
         return;
     }
-    
+
     chatElements.launcherInput = document.getElementById('chatLauncherInput');
     chatElements.overlay = document.getElementById('chatOverlay');
     chatElements.closeBtn = document.getElementById('closeChat');
@@ -621,34 +569,34 @@ function initializeChatAssistant() {
     chatElements.textarea = document.getElementById('chatInput');
     chatElements.status = document.getElementById('chatStatus');
     chatElements.sendBtn = document.getElementById('sendChatBtn');
-    
+
     if (!chatElements.launcherInput || !chatElements.form || !chatElements.overlay) {
         return;
     }
-    
+
     chatHistory = loadChatHistory();
     renderChatMessages();
-    
+
     chatElements.launcherInput.addEventListener('click', openChatOverlay);
     chatElements.launcherInput.addEventListener('focus', openChatOverlay);
-    
+
     if (chatElements.closeBtn) {
         chatElements.closeBtn.addEventListener('click', closeChatOverlay);
     }
-    
+
     chatElements.overlay.addEventListener('click', (event) => {
         if (event.target === chatElements.overlay) {
             closeChatOverlay();
         }
     });
     chatElements.form.addEventListener('submit', handleChatSubmit);
-    
+
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape' && chatElements.overlay && chatElements.overlay.classList.contains('active')) {
             closeChatOverlay();
         }
     });
-    
+
     chatInitialized = true;
 }
 
@@ -674,7 +622,7 @@ function renderChatMessages() {
     if (!chatElements.messages) {
         return;
     }
-    
+
     if (!chatHistory.length) {
         const intro = "I'm your plan copilot. Ask how changing retirement age, savings, or income targets affects your outlook.";
         chatElements.messages.innerHTML = `
@@ -684,7 +632,7 @@ function renderChatMessages() {
         `;
         return;
     }
-    
+
     chatElements.messages.innerHTML = chatHistory
         .map(message => `
             <div class="chat-message ${message.role}">
@@ -692,7 +640,7 @@ function renderChatMessages() {
             </div>
         `)
         .join('');
-    
+
     chatElements.messages.scrollTop = chatElements.messages.scrollHeight;
 }
 
@@ -711,12 +659,12 @@ function handleChatSubmit(event) {
     if (chatIsSending) {
         return;
     }
-    
+
     const message = chatElements.textarea.value.trim();
     if (!message) {
         return;
     }
-    
+
     addChatMessage('user', message);
     chatElements.textarea.value = '';
     setChatStatus('Thinking...');
@@ -724,7 +672,7 @@ function handleChatSubmit(event) {
     if (chatElements.sendBtn) {
         chatElements.sendBtn.disabled = true;
     }
-    
+
     fetch('/api/chat', {
         method: 'POST',
         headers: {
@@ -735,30 +683,30 @@ function handleChatSubmit(event) {
             plan_data: planData
         })
     })
-    .then(response => response.json())
-    .then(result => {
-        if (result.response) {
-            addChatMessage('assistant', result.response);
-            setChatStatus('');
-        } else {
-            const errorMessage = result.error || 'Something went wrong.';
-            addChatMessage('error', errorMessage);
-            if (result.details) {
-                console.warn('Chat error details:', result.details);
+        .then(response => response.json())
+        .then(result => {
+            if (result.response) {
+                addChatMessage('assistant', result.response);
+                setChatStatus('');
+            } else {
+                const errorMessage = result.error || 'Something went wrong.';
+                addChatMessage('error', errorMessage);
+                if (result.details) {
+                    console.warn('Chat error details:', result.details);
+                }
+                setChatStatus('Unable to get a reply.');
             }
+        })
+        .catch(() => {
+            addChatMessage('error', 'Network error. Please try again.');
             setChatStatus('Unable to get a reply.');
-        }
-    })
-    .catch(() => {
-        addChatMessage('error', 'Network error. Please try again.');
-        setChatStatus('Unable to get a reply.');
-    })
-    .finally(() => {
-        chatIsSending = false;
-        if (chatElements.sendBtn) {
-            chatElements.sendBtn.disabled = false;
-        }
-    });
+        })
+        .finally(() => {
+            chatIsSending = false;
+            if (chatElements.sendBtn) {
+                chatElements.sendBtn.disabled = false;
+            }
+        });
 }
 
 function openChatOverlay() {
@@ -793,7 +741,7 @@ function formatChatMessage(content) {
     const lines = content.split(/\r?\n/);
     let html = '';
     let inList = false;
-    
+
     lines.forEach(rawLine => {
         const line = rawLine.trim();
         if (!line) {
@@ -803,7 +751,7 @@ function formatChatMessage(content) {
             }
             return;
         }
-        
+
         if (/^[-*]\s+/.test(line)) {
             if (!inList) {
                 html += '<ul>';
@@ -813,12 +761,12 @@ function formatChatMessage(content) {
             html += `<li>${applyInlineFormatting(text)}</li>`;
             return;
         }
-        
+
         if (inList) {
             html += '</ul>';
             inList = false;
         }
-        
+
         if (/^###\s+/.test(line)) {
             html += `<h4>${applyInlineFormatting(line.replace(/^###\s+/, ''))}</h4>`;
         } else if (/^##\s+/.test(line)) {
@@ -829,11 +777,11 @@ function formatChatMessage(content) {
             html += `<p>${applyInlineFormatting(line)}</p>`;
         }
     });
-    
+
     if (inList) {
         html += '</ul>';
     }
-    
+
     return html;
 }
 
@@ -863,13 +811,13 @@ function initializeCurrencyControls() {
     currencyElements.toggle = document.getElementById('currencyToggle');
     currencyElements.menu = document.getElementById('currencyMenu');
     currencyElements.label = document.getElementById('currencyToggleLabel');
-    
+
     ensureCurrencyRate(currencyState.selected);
     updateCurrencyRateUI();
-    
+
     const selector = document.getElementById('currencySelector');
     const rateInput = document.getElementById('currencyRateInput');
-    
+
     if (selector) {
         selector.addEventListener('change', () => {
             const selectedCurrency = selector.value;
@@ -884,7 +832,7 @@ function initializeCurrencyControls() {
             setCurrencyMenuState(false);
         });
     }
-    
+
     if (rateInput) {
         rateInput.addEventListener('change', () => {
             const updatedRate = sanitizeRate(rateInput.value, getCurrentCurrencyRate());
@@ -894,7 +842,7 @@ function initializeCurrencyControls() {
             refreshDashboardAfterCurrencyChange();
         });
     }
-    
+
     if (currencyElements.toggle && currencyElements.dropdown) {
         currencyElements.toggle.addEventListener('click', (event) => {
             event.preventDefault();
@@ -902,7 +850,7 @@ function initializeCurrencyControls() {
             setCurrencyMenuState(!isOpen);
         });
     }
-    
+
     if (!currencyMenuListenersBound) {
         document.addEventListener('click', handleCurrencyMenuOutsideClick);
         document.addEventListener('keydown', handleCurrencyMenuKeydown);
@@ -916,7 +864,7 @@ function updateCurrencyRateUI() {
     const rateSuffix = document.getElementById('currencyRateSuffix');
     const toggleLabel = currencyElements.label || document.getElementById('currencyToggleLabel');
     const rate = getCurrentCurrencyRate();
-    
+
     if (selector && selector.value !== currencyState.selected) {
         selector.value = currencyState.selected;
     }
@@ -962,7 +910,7 @@ function convertPlanData(sourcePlan, rate) {
     }
     const safeRate = Number.isFinite(rate) && rate > 0 ? rate : 1;
     const converted = JSON.parse(JSON.stringify(sourcePlan));
-    
+
     convertNumericFields(converted, [
         'target_net_worth',
         'projected_current_assets',
@@ -974,7 +922,7 @@ function convertPlanData(sourcePlan, rate) {
         'current_monthly_savings',
         'pre_tax_retirement_income'
     ], safeRate);
-    
+
     if (Array.isArray(converted.year_by_year)) {
         converted.year_by_year = converted.year_by_year.map(entry => {
             const updatedEntry = { ...entry };
@@ -989,14 +937,14 @@ function convertPlanData(sourcePlan, rate) {
             return updatedEntry;
         });
     }
-    
+
     if (converted.inputs) {
         convertNumericFields(converted.inputs, [
             'ideal_retirement_income',
             'current_asset_values',
             'monthly_savings'
         ], safeRate);
-        
+
         if (Array.isArray(converted.inputs.payouts)) {
             converted.inputs.payouts = converted.inputs.payouts.map(payout => {
                 const payoutClone = { ...payout };
@@ -1008,7 +956,7 @@ function convertPlanData(sourcePlan, rate) {
             });
         }
     }
-    
+
     return converted;
 }
 
