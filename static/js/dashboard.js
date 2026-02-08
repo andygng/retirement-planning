@@ -678,13 +678,12 @@ function triggerAIAnalysis() {
     if (!chatElements.messages) return;
 
     chatElements.messages.innerHTML = ''; // Clear previous
-    chatElements.messages.innerHTML = ''; // Clear previous
     showTypingIndicator();
 
     // Add a temporary "Thinking..." message or just wait for stream/response
     // slightly different behavior than standard user chat
 
-    const analysisPrompt = "Provide a single, conversational sentence summarizing the high-level result of this retirement plan. Be extremely concise and encouraging. Avoid detailed bullet points.";
+    const analysisPrompt = "Provide a 1-2 sentence plain-language summary of this retirement plan. Keep it under 45 words and avoid markdown.";
 
     chatIsSending = true;
     if (chatElements.sendBtn) chatElements.sendBtn.disabled = true;
@@ -731,7 +730,9 @@ function renderChatMessages() {
         const intro = "I'm your plan copilot. Ask how changing retirement age, savings, or income targets affects your outlook.";
         chatElements.messages.innerHTML = `
             <div class="chat-message assistant">
-                ${formatChatMessage(intro)}
+                <div class="chat-bubble">
+                    ${formatChatMessage(intro)}
+                </div>
             </div>
         `;
         return;
@@ -740,7 +741,9 @@ function renderChatMessages() {
     chatElements.messages.innerHTML = chatHistory
         .map(message => `
             <div class="chat-message ${message.role}">
-                ${formatChatMessage(message.content)}
+                <div class="chat-bubble">
+                    ${formatChatMessage(message.content)}
+                </div>
             </div>
         `)
         .join('');
@@ -819,85 +822,121 @@ function showTypingIndicator() {
     if (!chatElements.messages) return;
 
     // Check if already showing
-    if (document.getElementById('typing-indicator')) return;
+    if (document.getElementById('typing-indicator-row')) return;
 
-    const indicatorHtml = `
-        <div class="typing-indicator" id="typing-indicator">
+    const row = document.createElement('div');
+    row.className = 'chat-message assistant typing-row';
+    row.id = 'typing-indicator-row';
+    row.innerHTML = `
+        <div class="typing-indicator" id="typing-indicator" aria-label="Assistant is typing">
             <div class="typing-dot"></div>
             <div class="typing-dot"></div>
             <div class="typing-dot"></div>
         </div>
     `;
-
-    const wrapper = document.createElement('div');
-    wrapper.style.alignSelf = 'flex-start'; // Align left
-    wrapper.innerHTML = indicatorHtml;
-    chatElements.messages.appendChild(wrapper);
+    chatElements.messages.appendChild(row);
     chatElements.messages.scrollTop = chatElements.messages.scrollHeight;
 }
 
 function removeTypingIndicator() {
-    const indicators = document.querySelectorAll('#typing-indicator');
-    indicators.forEach(el => {
-        // Remove the parent wrapper we added or the element itself if direct
-        if (el.parentElement && el.parentElement.parentElement === chatElements.messages) {
-            el.parentElement.remove();
-        } else {
-            el.remove();
-        }
-    });
+    const row = document.getElementById('typing-indicator-row');
+    if (row) {
+        row.remove();
+        return;
+    }
+    const indicator = document.getElementById('typing-indicator');
+    if (indicator) {
+        indicator.remove();
+    }
 }
 
 function formatChatMessage(content) {
-    const lines = content.split(/\r?\n/);
+    const normalized = String(content || '')
+        .replace(/\r\n?/g, '\n')
+        .replace(/[ \t]+\n/g, '\n')
+        .trim();
+    if (!normalized) {
+        return '<p></p>';
+    }
+
+    const lines = normalized.split('\n');
     let html = '';
-    let inList = false;
+    let activeListType = null;
+    let codeBlockOpen = false;
+
+    function closeList() {
+        if (activeListType) {
+            html += `</${activeListType}>`;
+            activeListType = null;
+        }
+    }
+
+    function openList(listType) {
+        if (activeListType !== listType) {
+            closeList();
+            html += `<${listType}>`;
+            activeListType = listType;
+        }
+    }
 
     lines.forEach(rawLine => {
         const line = rawLine.trim();
+
+        if (line.startsWith('```')) {
+            codeBlockOpen = !codeBlockOpen;
+            return;
+        }
+
+        if (codeBlockOpen || /^(-{3,}|_{3,}|\*{3,})$/.test(line)) {
+            return;
+        }
+
         if (!line) {
-            if (inList) {
-                html += '</ul>';
-                inList = false;
-            }
+            closeList();
             return;
         }
 
-        if (/^[-*]\s+/.test(line)) {
-            if (!inList) {
-                html += '<ul>';
-                inList = true;
-            }
-            const text = line.replace(/^[-*]\s+/, '');
-            html += `<li>${applyInlineFormatting(text)}</li>`;
+        const cleanedLine = line
+            .replace(/^>\s?/, '')
+            .replace(/^#{1,6}\s*/, '');
+
+        const orderedMatch = cleanedLine.match(/^(\d+)[.)]\s*(.+)$/);
+        if (orderedMatch) {
+            openList('ol');
+            html += `<li>${applyInlineFormatting(orderedMatch[2])}</li>`;
             return;
         }
 
-        if (inList) {
-            html += '</ul>';
-            inList = false;
+        const unorderedMatch = cleanedLine.match(/^[-*•]\s+(.+)$/);
+        if (unorderedMatch) {
+            openList('ul');
+            html += `<li>${applyInlineFormatting(unorderedMatch[1])}</li>`;
+            return;
         }
 
-        if (/^###\s+/.test(line)) {
-            html += `<h4>${applyInlineFormatting(line.replace(/^###\s+/, ''))}</h4>`;
-        } else if (/^##\s+/.test(line)) {
-            html += `<h3>${applyInlineFormatting(line.replace(/^##\s+/, ''))}</h3>`;
-        } else if (/^#\s+/.test(line)) {
-            html += `<h2>${applyInlineFormatting(line.replace(/^#\s+/, ''))}</h2>`;
-        } else {
-            html += `<p>${applyInlineFormatting(line)}</p>`;
+        closeList();
+
+        if (!cleanedLine) {
+            return;
         }
+
+        // Keep short lead-in lines visually distinct without giant heading styles.
+        if (/^([A-Za-z][^.!?]{0,80}):$/.test(cleanedLine)) {
+            html += `<p class="chat-lead">${applyInlineFormatting(cleanedLine)}</p>`;
+            return;
+        }
+        html += `<p>${applyInlineFormatting(cleanedLine)}</p>`;
     });
 
-    if (inList) {
-        html += '</ul>';
-    }
+    closeList();
 
     return html;
 }
 
 function applyInlineFormatting(text) {
     let escaped = escapeHtml(text);
+    escaped = escaped.replace(/`([^`]+)`/g, '<code>$1</code>');
+    escaped = escaped.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
     escaped = escaped.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     escaped = escaped.replace(/\*(.+?)\*/g, '<em>$1</em>');
     return escaped;

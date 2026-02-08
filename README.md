@@ -14,6 +14,9 @@ A comprehensive retirement planning web application that calculates your target 
   - Visual charts showing net worth projections
   - Year-by-year projections table
   - Detailed analysis and recommendations
+- **AI Plan Copilot**:
+  - Distinct user and assistant chat bubbles for easier scanning
+  - Short, plain-language responses focused on key takeaways
 - **Edit & Recalculate**: Modify inputs and see updated results in real-time
 
 ## Setup

@@ -16,6 +16,8 @@ This is a simple retirement planning web app. It guides a user through a short o
 - Favor clear language, big readable type, and friendly microcopy.
 - Avoid complex features or extra steps.
 - Maintain the existing visual direction (soft gradients, glass cards, motion).
+- In AI chat, keep user vs assistant messages visually distinct and easy to scan.
+- AI responses should be short, plain-language, and avoid noisy markdown headings.
 
 ## Technical constraints
 - Keep dependencies minimal. Do not add build tools or frameworks.

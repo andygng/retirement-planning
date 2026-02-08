@@ -710,65 +710,129 @@ tbody tr:hover {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: var(--space-6);
-    /* Increased spacing between messages */
+    gap: var(--space-4);
     max-height: 400px;
     overflow-y: auto;
     padding-right: var(--space-2);
 }
 
-.copilot-message {
-    font-size: var(--font-size-lg);
-    line-height: 1.7;
-    /* Relaxed line height */
-    animation: fadeIn 0.4s ease-out;
-    max-width: 90%;
+.chat-message {
+    width: 100%;
+    display: flex;
+    animation: fadeIn 0.35s ease-out;
 }
 
-.copilot-message.assistant {
-    color: var(--color-text-primary);
-    font-weight: 500;
-    align-self: flex-start;
+.chat-message.assistant {
+    justify-content: flex-start;
 }
 
-.copilot-message.user {
-    align-self: flex-end;
-    background: var(--color-gray-100);
-    color: var(--color-text-primary);
-    padding: var(--space-4) var(--space-6);
-    /* More padding */
-    border-radius: var(--radius-2xl) var(--radius-2xl) 0 var(--radius-2xl);
-    max-width: 80%;
-    font-size: var(--font-size-base);
-    font-weight: 400;
-    margin-left: auto;
-    /* Ensure right alignment */
+.chat-message.user {
+    justify-content: flex-end;
+}
+
+.chat-message.error {
+    justify-content: flex-start;
+}
+
+.chat-bubble {
+    max-width: min(84%, 76ch);
+    padding: var(--space-4) var(--space-5);
+    border-radius: var(--radius-xl);
+    background: var(--color-gray-50);
     border: 1px solid var(--color-border-subtle);
-    /* subtle border definition */
+    box-shadow: var(--shadow-sm);
+    color: var(--color-text-primary);
 }
 
-.copilot-message strong {
-    color: var(--color-black);
+.chat-message.assistant .chat-bubble {
+    background: linear-gradient(140deg, rgba(10, 147, 150, 0.16), rgba(64, 201, 163, 0.14) 55%, rgba(255, 255, 255, 0.95));
+    border-color: rgba(10, 147, 150, 0.24);
+    border-radius: var(--radius-xl) var(--radius-xl) var(--radius-xl) var(--radius-sm);
+}
+
+.chat-message.user .chat-bubble {
+    background: linear-gradient(135deg, var(--color-accent-primary), var(--color-accent-primary-light));
+    border-color: transparent;
+    color: var(--color-white);
+    border-radius: var(--radius-xl) var(--radius-xl) var(--radius-sm) var(--radius-xl);
+}
+
+.chat-message.error .chat-bubble {
+    background: #FFF5F5;
+    border-color: rgba(220, 38, 38, 0.24);
+    color: #991B1B;
+}
+
+.chat-bubble p {
+    margin: 0;
+    font-size: var(--font-size-base);
+    line-height: 1.6;
+}
+
+.chat-bubble p + p {
+    margin-top: var(--space-3);
+}
+
+.chat-bubble .chat-lead {
+    font-weight: 600;
+}
+
+.chat-bubble ul,
+.chat-bubble ol {
+    margin: var(--space-2) 0 0 var(--space-5);
+    padding: 0;
+    display: grid;
+    gap: var(--space-2);
+}
+
+.chat-bubble strong {
     font-weight: 700;
+}
+
+.chat-message.user .chat-bubble strong {
+    color: var(--color-white);
+}
+
+.chat-bubble em {
+    font-style: italic;
+}
+
+.chat-bubble code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 0.9em;
+    background: rgba(0, 0, 0, 0.07);
+    border-radius: var(--radius-sm);
+    padding: 0.1rem 0.35rem;
+}
+
+.chat-message.user .chat-bubble code {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.chat-bubble a {
+    color: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    font-weight: 600;
 }
 
 /* Typing Indicator Animation */
 .typing-indicator {
-    padding: var(--space-4) var(--space-6);
-    background: var(--color-gray-50);
-    border-radius: var(--radius-xl);
+    padding: var(--space-3) var(--space-4);
+    background: rgba(10, 147, 150, 0.12);
+    border: 1px solid rgba(10, 147, 150, 0.24);
+    border-radius: var(--radius-xl) var(--radius-xl) var(--radius-xl) var(--radius-sm);
     display: inline-flex;
     align-items: center;
     gap: 4px;
     width: fit-content;
-    align-self: flex-start;
     animation: fadeIn 0.3s ease-out;
 }
 
 .typing-dot {
     width: 6px;
     height: 6px;
-    background: var(--color-gray-400);
+    background: rgba(10, 147, 150, 0.75);
     border-radius: 50%;
     animation: typingBounce 1.4s infinite ease-in-out both;
 }
@@ -1127,6 +1191,16 @@ tbody tr:hover {
         gap: var(--space-4);
     }
 
+    .chat-bubble {
+        max-width: 92%;
+        padding: var(--space-4);
+    }
+
+    .chat-bubble ul,
+    .chat-bubble ol {
+        margin-left: var(--space-4);
+    }
+
     .copilot-input {
         font-size: var(--font-size-base);
     }
@@ -1215,5 +1289,10 @@ tbody tr:hover {
 
     .copilot-messages {
         max-height: 280px;
+    }
+
+    .chat-bubble {
+        max-width: 96%;
+        padding: var(--space-3) var(--space-4);
     }
 }

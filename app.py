@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 from flask import Flask, render_template, request, jsonify
 from openai import OpenAI
@@ -17,6 +18,37 @@ if load_dotenv:
     load_dotenv()
 
 OPENAI_MODEL = os.environ.get('OPENAI_MODEL', 'gpt-5.2')
+
+
+def normalize_chat_response(text):
+    """Clean markdown-heavy output so chat stays readable in the UI."""
+    if not text:
+        return ''
+
+    cleaned_lines = []
+    blank_streak = 0
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+
+        # Drop markdown fences and horizontal rules.
+        if line.startswith('```') or re.match(r'^(-{3,}|_{3,}|\*{3,})$', line):
+            continue
+
+        # Strip heading markers like "####" that read poorly in chat bubbles.
+        line = re.sub(r'^#{1,6}\s*', '', line)
+        line = line.replace('• ', '- ')
+
+        if not line:
+            if blank_streak == 0 and cleaned_lines:
+                cleaned_lines.append('')
+            blank_streak += 1
+            continue
+
+        blank_streak = 0
+        cleaned_lines.append(line)
+
+    return '\n'.join(cleaned_lines).strip()
 
 def get_openai_client():
     """Create an OpenAI client if the API key is configured."""
@@ -77,15 +109,19 @@ def chat():
     try:
         client = get_openai_client()
         system_prompt = (
-            "You are a retirement planning assistant. "
-            "Use the provided plan data to answer questions with actionable, concise guidance. "
-            "If a recalculation is required, do the math required by varrying either the input suggested by the user or providing multiple different scenarios."
+            "You are a retirement planning assistant for a non-technical user. "
+            "Use the provided plan data for every answer when possible. "
+            "Default response length: 2-4 short sentences, under 100 words, unless the user asks for more detail. "
+            "Use plain language and a calm tone. "
+            "No markdown headings, no hash symbols, no tables, and no code blocks. "
+            "If formatting helps, use at most 3 simple bullets starting with '- '. "
+            "If a recalculation is requested, provide the key final numbers with a short explanation of trade-offs."
         )
         plan_context = json.dumps(plan_data, default=str) if plan_data else "No plan data supplied."
         user_prompt = (
             f"User question: {message}\n\n"
             f"Current retirement plan data (JSON): {plan_context}\n\n"
-            "Highlight trade-offs, maintain a calm tone, and reference exact figures if available."
+            "Answer directly. Mention trade-offs briefly and reference exact figures when available."
         )
         
         completion = client.chat.completions.create(
@@ -97,7 +133,7 @@ def chat():
             ],
         )
         
-        answer = completion.choices[0].message.content.strip()
+        answer = normalize_chat_response(completion.choices[0].message.content.strip())
         return jsonify({'response': answer})
     except RuntimeError as err:
         return jsonify({'error': str(err)}), 500
