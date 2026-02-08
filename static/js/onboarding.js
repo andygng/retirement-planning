@@ -85,6 +85,10 @@ let dashboardSlideElement = null;
 let dashboardTransitionActive = false;
 let progressInterval = null;
 
+function shouldAutoFocusInput() {
+    return !(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+}
+
 function shouldFormatWithCommas(question) {
     return question && question.prefix === '$';
 }
@@ -361,7 +365,7 @@ function renderQuestion(index) {
     const mountQuestion = () => {
         container.appendChild(questionDiv);
         const focusable = questionDiv.querySelector('.question-body input, .question-body select');
-        if (focusable && question.type !== 'payouts') {
+        if (focusable && question.type !== 'payouts' && shouldAutoFocusInput()) {
             focusable.focus();
         }
 

@@ -94,6 +94,7 @@
 body {
     font-family: var(--font-family);
     min-height: 100vh;
+    min-height: 100dvh;
     line-height: 1.6;
     color: var(--color-text-primary);
     background: var(--color-background);
@@ -433,6 +434,10 @@ body {
     border-radius: var(--radius-2xl);
     padding: var(--space-6);
     box-shadow: var(--shadow-sm);
+}
+
+.chart-container {
+    container-type: inline-size;
 }
 
 .chart-container h2,
@@ -983,6 +988,26 @@ tbody tr:hover {
     justify-content: center;
 }
 
+@container (max-width: 520px) {
+    .chart-wrapper {
+        height: 280px;
+    }
+
+    .chart-wrapper-donut {
+        height: 240px;
+    }
+}
+
+@container (max-width: 380px) {
+    .chart-wrapper {
+        height: 250px;
+    }
+
+    .chart-wrapper-donut {
+        height: 220px;
+    }
+}
+
 /* =============================================================================
    RESPONSIVE DESIGN
    ============================================================================= */
@@ -993,23 +1018,202 @@ tbody tr:hover {
     }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 640px) {
     body {
-        padding: var(--space-6) var(--space-4) var(--space-20);
+        min-height: 100dvh;
+        padding-top: calc(var(--space-5) + env(safe-area-inset-top));
+        padding-right: calc(var(--space-4) + env(safe-area-inset-right));
+        padding-bottom: calc(var(--space-8) + env(safe-area-inset-bottom));
+        padding-left: calc(var(--space-4) + env(safe-area-inset-left));
+    }
+
+    body.modal-open-mobile {
+        overflow: hidden;
+    }
+
+    .dashboard-container {
+        padding: 0;
     }
 
     .dashboard-header {
         flex-direction: column;
         align-items: flex-start;
+        gap: var(--space-4);
+        margin-bottom: var(--space-6);
+        padding-bottom: var(--space-5);
+    }
+
+    .header-left {
+        width: 100%;
+        flex: none;
     }
 
     .dashboard-header h1 {
         font-size: var(--font-size-2xl);
     }
 
+    .header-buttons {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: var(--space-2);
+    }
 
+    .header-buttons>.btn,
+    .header-buttons>.currency-dropdown {
+        width: 100%;
+    }
+
+    .btn-restart,
+    .btn-edit,
+    .btn-currency {
+        width: 100%;
+        min-height: 44px;
+        justify-content: center;
+    }
+
+    .currency-dropdown {
+        width: 100%;
+    }
+
+    .currency-menu {
+        position: static;
+        top: auto;
+        right: auto;
+        margin-top: var(--space-2);
+        min-width: 0;
+        width: 100%;
+        box-shadow: var(--shadow-md);
+    }
+
+    .currency-rate-field {
+        width: 100%;
+    }
+
+    .currency-rate-field input {
+        flex: 1;
+        min-width: 0;
+        text-align: left;
+        font-size: var(--font-size-base);
+    }
+
+    .summary-cards,
+    .charts-section,
+    .kpi-cards,
+    .insights-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .chart-container,
+    .commentary-section,
+    .ai-copilot-section {
+        border-radius: var(--radius-xl);
+        padding: var(--space-5);
+    }
+
+    .kpi-card {
+        padding: var(--space-5);
+        gap: var(--space-4);
+    }
+
+    .kpi-icon {
+        width: 40px;
+        height: 40px;
+        font-size: var(--font-size-2xl);
+    }
+
+    .copilot-messages {
+        max-height: 320px;
+        gap: var(--space-4);
+    }
+
+    .copilot-input {
+        font-size: var(--font-size-base);
+    }
+
+    .btn-copilot-send {
+        width: 44px;
+        height: 44px;
+        flex-shrink: 0;
+    }
+
+    .copilot-input-container form {
+        border-radius: var(--radius-xl);
+    }
+
+    .modal {
+        align-items: flex-end;
+        justify-content: center;
+        padding: 0;
+    }
+
+    .modal-content {
+        width: 100%;
+        max-width: none;
+        max-height: 88dvh;
+        border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .modal-header,
+    .modal-body,
+    .modal-footer {
+        padding: var(--space-4);
+    }
+
+    .modal-body {
+        flex: 1;
+        overflow-y: auto;
+    }
+
+    .modal-footer {
+        position: sticky;
+        bottom: 0;
+        background: var(--color-surface);
+    }
+
+    .modal-footer .btn {
+        flex: 1;
+        min-height: 44px;
+    }
+
+    .edit-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .form-group input,
+    .form-group select {
+        min-height: 44px;
+        font-size: var(--font-size-base);
+    }
 
     .summary-card .value {
         font-size: var(--font-size-2xl);
+    }
+}
+
+@media (max-width: 390px) {
+    body {
+        padding-top: calc(var(--space-4) + env(safe-area-inset-top));
+        padding-right: calc(var(--space-3) + env(safe-area-inset-right));
+        padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom));
+        padding-left: calc(var(--space-3) + env(safe-area-inset-left));
+    }
+
+    .dashboard-header h1 {
+        font-size: var(--font-size-xl);
+    }
+
+    .summary-card .value {
+        font-size: var(--font-size-xl);
+    }
+
+    .kpi-card {
+        padding: var(--space-4);
+    }
+
+    .copilot-messages {
+        max-height: 280px;
     }
 }

@@ -94,6 +94,7 @@
 body {
     font-family: var(--font-family);
     min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -727,15 +728,94 @@ body.dashboard-transition .onboarding-container {
 
 @media (max-width: 640px) {
     body {
-        padding: var(--space-6) var(--space-4);
+        min-height: 100dvh;
+        justify-content: flex-start;
+        align-items: flex-start;
+        padding-top: calc(var(--space-5) + env(safe-area-inset-top));
+        padding-right: calc(var(--space-4) + env(safe-area-inset-right));
+        padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom));
+        padding-left: calc(var(--space-4) + env(safe-area-inset-left));
+    }
+
+    .welcome-container {
+        padding: var(--space-8) var(--space-4);
     }
 
     .welcome-title {
         font-size: var(--font-size-4xl);
     }
 
+    .welcome-subtitle {
+        font-size: var(--font-size-base);
+        margin-bottom: var(--space-8);
+    }
+
+    .onboarding-container {
+        padding: 0;
+        text-align: left;
+    }
+
+    .progress-text {
+        text-align: left;
+        margin-bottom: var(--space-8);
+    }
+
+    .question-container {
+        min-height: auto;
+    }
+
     .question-title {
         font-size: var(--font-size-2xl);
+        margin-bottom: var(--space-3);
+    }
+
+    .question-description {
+        max-width: none;
+        margin-bottom: var(--space-6);
+    }
+
+    .question-body {
+        align-items: stretch;
+        gap: var(--space-5);
+    }
+
+    .input-group.narrow-input {
+        width: min(100%, 320px);
+    }
+
+    .input-group select {
+        width: min(100%, 320px);
+        min-height: 44px;
+        font-size: var(--font-size-base);
+    }
+
+    .input-affix {
+        width: min(100%, 320px);
+        margin-left: auto;
+        margin-right: auto;
+    }
+
+    .input-affix.has-prefix input,
+    .input-affix.has-suffix input {
+        padding-left: 32px;
+        padding-right: 32px;
+    }
+
+    .input-group input {
+        min-height: 44px;
+        font-size: var(--font-size-base);
+    }
+
+    .btn-primary,
+    .btn-back,
+    .btn-add-payout,
+    .btn-remove {
+        min-height: 44px;
+    }
+
+    .btn-primary {
+        width: min(100%, 320px);
+        margin-top: var(--space-2);
     }
 
     .dashboard-slide__glimpse {
@@ -743,12 +823,67 @@ body.dashboard-transition .onboarding-container {
         gap: var(--space-3);
     }
 
+    .payouts-container {
+        max-width: none;
+    }
+
     .payout-item {
         flex-direction: column;
         align-items: stretch;
+        gap: var(--space-3);
     }
 
     .payout-item .input-group {
         min-width: 100%;
+    }
+
+    .btn-remove {
+        align-self: flex-start;
+    }
+
+    .navigation {
+        margin-top: var(--space-6);
+    }
+
+    .dashboard-slide {
+        justify-content: flex-start;
+        overflow-y: auto;
+        padding-top: calc(var(--space-8) + env(safe-area-inset-top));
+        padding-right: calc(var(--space-4) + env(safe-area-inset-right));
+        padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom));
+        padding-left: calc(var(--space-4) + env(safe-area-inset-left));
+    }
+
+    .dashboard-slide__title {
+        font-size: var(--font-size-2xl);
+    }
+
+    .dashboard-slide__subtitle {
+        margin-bottom: var(--space-8);
+    }
+}
+
+@media (max-width: 390px) {
+    body {
+        padding-top: calc(var(--space-4) + env(safe-area-inset-top));
+        padding-right: calc(var(--space-3) + env(safe-area-inset-right));
+        padding-bottom: calc(var(--space-5) + env(safe-area-inset-bottom));
+        padding-left: calc(var(--space-3) + env(safe-area-inset-left));
+    }
+
+    .welcome-title {
+        font-size: var(--font-size-3xl);
+    }
+
+    .question-title {
+        font-size: var(--font-size-xl);
+    }
+
+    .dashboard-slide__card {
+        padding: var(--space-4);
+    }
+
+    .dashboard-slide__card-value {
+        font-size: var(--font-size-lg);
     }
 }

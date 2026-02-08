@@ -30,7 +30,7 @@ python app.py
 
 3. Open your browser and navigate to:
 ```
-http://localhost:5000
+http://localhost:5001
 ```
 
 ## Usage
@@ -55,9 +55,15 @@ http://localhost:5000
 - **Tax Calculator**: Canadian federal and provincial tax brackets (2024)
 - **Calculations**: Monthly compounding for all investments and savings
 
+## Mobile Support Policy
+
+- Mobile enhancements are phone-only (`max-width: 640px`) with a narrow-phone fallback (`max-width: 390px`).
+- iPhone Safari is the primary mobile target, with Android Chrome as secondary validation.
+- Mobile implementation is CSS-first; JS viewport branching should stay minimal.
+- Desktop and tablet behavior should remain unchanged unless explicitly requested.
+
 ## Notes
 
 - All calculations assume monthly compounding
 - Tax rates are based on 2024 Canadian tax brackets (Ontario provincial rates)
 - The tool provides projections and should not be considered as financial advice
-

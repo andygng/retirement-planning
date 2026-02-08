@@ -3,6 +3,7 @@ let basePlanData = null;
 let charts = {};
 const CHAT_STORAGE_KEY = 'retirementChatHistory';
 const CURRENCY_STORAGE_KEY = 'retirementCurrencyPreferences';
+let donutLegendResizeObserver = null;
 
 const currencyConfig = {
     CAD: { locale: 'en-CA', currency: 'CAD', shortSymbol: 'CA$', defaultRate: 1 },
@@ -180,7 +181,58 @@ function renderKPICards() {
     `;
 }
 
+function getDonutLegendPosition(container) {
+    if (!container) {
+        return 'right';
+    }
+    return container.clientWidth <= 520 ? 'bottom' : 'right';
+}
+
+function applyDonutLegendLayout(chart) {
+    if (!chart || !chart.options || !chart.options.plugins || !chart.options.plugins.legend) {
+        return;
+    }
+    const container = chart.canvas ? chart.canvas.closest('.chart-container') : null;
+    const nextPosition = getDonutLegendPosition(container);
+    const nextAlign = nextPosition === 'bottom' ? 'start' : 'center';
+    const legendOptions = chart.options.plugins.legend;
+
+    if (legendOptions.position === nextPosition && legendOptions.align === nextAlign) {
+        return;
+    }
+
+    legendOptions.position = nextPosition;
+    legendOptions.align = nextAlign;
+    chart.update('none');
+}
+
+function observeDonutLegendContainer(chart) {
+    if (donutLegendResizeObserver) {
+        donutLegendResizeObserver.disconnect();
+        donutLegendResizeObserver = null;
+    }
+
+    if (!chart || !chart.canvas || typeof ResizeObserver === 'undefined') {
+        return;
+    }
+
+    const container = chart.canvas.closest('.chart-container');
+    if (!container) {
+        return;
+    }
+
+    donutLegendResizeObserver = new ResizeObserver(() => {
+        applyDonutLegendLayout(chart);
+    });
+    donutLegendResizeObserver.observe(container);
+}
+
 function renderCharts() {
+    if (donutLegendResizeObserver) {
+        donutLegendResizeObserver.disconnect();
+        donutLegendResizeObserver = null;
+    }
+
     if (!planData || !Array.isArray(planData.year_by_year)) {
         return;
     }
@@ -271,6 +323,8 @@ function renderCharts() {
 
     // Wealth Breakdown Donut Chart
     const breakdownCtx = document.getElementById('breakdownChart').getContext('2d');
+    const breakdownContainer = breakdownCtx.canvas ? breakdownCtx.canvas.closest('.chart-container') : null;
+    const initialLegendPosition = getDonutLegendPosition(breakdownContainer);
     if (charts.breakdown) {
         charts.breakdown.destroy();
     }
@@ -302,7 +356,8 @@ function renderCharts() {
             maintainAspectRatio: false,
             plugins: {
                 legend: {
-                    position: 'right',
+                    position: initialLegendPosition,
+                    align: initialLegendPosition === 'bottom' ? 'start' : 'center',
                     labels: {
                         boxWidth: 12,
                         padding: 15,
@@ -326,6 +381,9 @@ function renderCharts() {
             cutout: '70%'
         }
     });
+
+    applyDonutLegendLayout(charts.breakdown);
+    observeDonutLegendContainer(charts.breakdown);
 }
 
 function generateCommentary() {
@@ -433,6 +491,15 @@ function populateEditForm() {
     setupCommaFormatting(form);
 }
 
+function setMobileModalScrollLock(shouldLock) {
+    const isPhoneViewport = window.matchMedia && window.matchMedia('(max-width: 640px)').matches;
+    if (!isPhoneViewport) {
+        document.body.classList.remove('modal-open-mobile');
+        return;
+    }
+    document.body.classList.toggle('modal-open-mobile', shouldLock);
+}
+
 function openEditModal(event) {
     if (event) {
         event.preventDefault();
@@ -441,11 +508,16 @@ function openEditModal(event) {
     populateEditForm();
     if (modal) {
         modal.classList.add('active');
+        setMobileModalScrollLock(true);
     }
 }
 
 function closeEditModal() {
-    document.getElementById('editModal').classList.remove('active');
+    const modal = document.getElementById('editModal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+    setMobileModalScrollLock(false);
 }
 
 function saveAndRecalculate() {
