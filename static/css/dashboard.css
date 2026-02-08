@@ -659,183 +659,210 @@ tbody tr:hover {
 }
 
 /* =============================================================================
-   CHAT ASSISTANT
+   AI COPILOT SECTION (Integrated)
    ============================================================================= */
 
-.chat-launcher {
-    position: fixed;
-    bottom: var(--space-8);
-    right: var(--space-8);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-    z-index: 900;
-}
-
-.chat-launcher input {
-    width: 300px;
-    max-width: 80vw;
-    padding: var(--space-4) var(--space-5);
-    border-radius: var(--radius-full);
-    border: 1px solid var(--color-border);
-    font-size: var(--font-size-sm);
-    box-shadow: var(--shadow-lg);
+.ai-copilot-section {
     background: var(--color-surface);
-    cursor: pointer;
-    color: var(--color-text-primary);
-    font-family: var(--font-family);
-    transition: box-shadow var(--transition-fast), border-color var(--transition-fast);
-}
-
-.chat-launcher input:hover {
-    box-shadow: var(--shadow-xl);
-    border-color: var(--color-gray-300);
-}
-
-.chat-launcher input::placeholder {
-    color: var(--color-text-muted);
-}
-
-.chat-launcher-hint {
-    font-size: var(--font-size-xs);
-    color: var(--color-text-muted);
-    text-align: right;
-}
-
-.chat-overlay {
-    position: fixed;
-    inset: 0;
-    display: none;
-    justify-content: flex-end;
-    background: rgba(0, 0, 0, 0.2);
-    padding: var(--space-6);
-    z-index: 1100;
-}
-
-.chat-overlay.active {
-    display: flex;
-}
-
-.chat-panel {
-    width: 400px;
-    max-width: 100%;
-    height: 100%;
-    max-height: 600px;
-    display: flex;
-    flex-direction: column;
-    background: var(--color-surface);
+    /* White */
+    border: 1px solid var(--color-border-subtle);
     border-radius: var(--radius-2xl);
     padding: var(--space-6);
-    box-shadow: var(--shadow-xl);
-    color: var(--color-text-primary);
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-5);
+    min-height: 200px;
+    position: relative;
+    transition: transform var(--transition-fast), box-shadow var(--transition-fast);
 }
 
-.chat-header {
+.ai-copilot-section:hover {
+    box-shadow: var(--shadow-md);
+}
+
+.copilot-header {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    margin-bottom: var(--space-4);
 }
 
-.chat-header h2 {
-    font-size: var(--font-size-lg);
-    font-weight: 600;
-    color: var(--color-text-primary);
-}
-
-.chat-header p {
-    font-size: var(--font-size-sm);
-    color: var(--color-text-muted);
-    margin-top: var(--space-1);
-}
-
-.chat-close {
-    background: none;
-    border: none;
+.copilot-header h2 {
     font-size: var(--font-size-xl);
-    color: var(--color-text-muted);
-    cursor: pointer;
-    line-height: 1;
-    padding: var(--space-1);
-    border-radius: var(--radius-md);
-    transition: background-color var(--transition-fast);
-}
-
-.chat-close:hover {
-    background: var(--color-gray-100);
+    font-weight: 600;
+    letter-spacing: -0.01em;
     color: var(--color-text-primary);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
 }
 
-.chat-messages {
+.copilot-icon {
+    display: none;
+}
+
+.copilot-messages {
     flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    /* Increased spacing between messages */
+    max-height: 400px;
     overflow-y: auto;
     padding-right: var(--space-2);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
 }
 
-.chat-message {
-    border-radius: var(--radius-xl);
-    padding: var(--space-3) var(--space-4);
-    font-size: var(--font-size-sm);
-    line-height: 1.6;
+.copilot-message {
+    font-size: var(--font-size-lg);
+    line-height: 1.7;
+    /* Relaxed line height */
+    animation: fadeIn 0.4s ease-out;
+    max-width: 90%;
 }
 
-.chat-message.user {
-    align-self: flex-end;
-    background: var(--color-black);
-    color: var(--color-white);
-}
-
-.chat-message.assistant {
+.copilot-message.assistant {
+    color: var(--color-text-primary);
+    font-weight: 500;
     align-self: flex-start;
+}
+
+.copilot-message.user {
+    align-self: flex-end;
+    background: var(--color-gray-100);
+    color: var(--color-text-primary);
+    padding: var(--space-4) var(--space-6);
+    /* More padding */
+    border-radius: var(--radius-2xl) var(--radius-2xl) 0 var(--radius-2xl);
+    max-width: 80%;
+    font-size: var(--font-size-base);
+    font-weight: 400;
+    margin-left: auto;
+    /* Ensure right alignment */
+    border: 1px solid var(--color-border-subtle);
+    /* subtle border definition */
+}
+
+.copilot-message strong {
+    color: var(--color-black);
+    font-weight: 700;
+}
+
+/* Typing Indicator Animation */
+.typing-indicator {
+    padding: var(--space-4) var(--space-6);
     background: var(--color-gray-50);
-    color: var(--color-text-primary);
-}
-
-.chat-message.error {
-    background: rgba(220, 38, 38, 0.08);
-    border: 1px solid rgba(220, 38, 38, 0.2);
-    color: var(--color-error);
-}
-
-.chat-input {
-    margin-top: var(--space-4);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-}
-
-.chat-input textarea {
-    width: 100%;
     border-radius: var(--radius-xl);
-    border: 1px solid var(--color-border);
-    background: var(--color-surface);
-    color: var(--color-text-primary);
-    padding: var(--space-3) var(--space-4);
-    resize: none;
-    font-family: var(--font-family);
-    font-size: var(--font-size-sm);
-    min-height: 60px;
-}
-
-.chat-input textarea:focus {
-    outline: none;
-    border-color: var(--color-accent-primary);
-}
-
-.chat-actions {
-    display: flex;
-    justify-content: space-between;
+    display: inline-flex;
     align-items: center;
-    gap: var(--space-3);
+    gap: 4px;
+    width: fit-content;
+    align-self: flex-start;
+    animation: fadeIn 0.3s ease-out;
 }
 
-.chat-status {
-    font-size: var(--font-size-xs);
+.typing-dot {
+    width: 6px;
+    height: 6px;
+    background: var(--color-gray-400);
+    border-radius: 50%;
+    animation: typingBounce 1.4s infinite ease-in-out both;
+}
+
+.typing-dot:nth-child(1) {
+    animation-delay: -0.32s;
+}
+
+.typing-dot:nth-child(2) {
+    animation-delay: -0.16s;
+}
+
+@keyframes typingBounce {
+
+    0%,
+    80%,
+    100% {
+        transform: scale(0);
+    }
+
+    40% {
+        transform: scale(1);
+    }
+}
+
+.copilot-input-container {
+    position: relative;
+    margin-top: var(--space-2);
+}
+
+.copilot-input-container form {
+    display: flex;
+    gap: var(--space-3);
+    background: var(--color-gray-50);
+    padding: var(--space-2);
+    border-radius: var(--radius-full);
+    border: 1px solid var(--color-border);
+    transition: border-color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.copilot-input-container form:focus-within {
+    border-color: var(--color-gray-300);
+    background: var(--color-surface);
+}
+
+.copilot-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    padding: var(--space-2) var(--space-4);
+    color: var(--color-text-primary);
+    font-family: var(--font-family);
+    font-size: var(--font-size-base);
+}
+
+.copilot-input:focus {
+    outline: none;
+}
+
+.copilot-input::placeholder {
     color: var(--color-text-muted);
 }
+
+.btn-copilot-send {
+    background: var(--color-black);
+    color: var(--color-white);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    cursor: pointer;
+    transition: transform var(--transition-fast), background-color var(--transition-fast);
+}
+
+.btn-copilot-send svg {
+    width: 18px;
+    height: 18px;
+    fill: currentColor;
+}
+
+.btn-copilot-send:hover {
+    background: var(--color-gray-800);
+}
+
+.btn-copilot-send:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Deprecated status text */
+.copilot-status {
+    display: none;
+}
+
+
+
 
 /* =============================================================================
    KPI CARDS
@@ -980,21 +1007,7 @@ tbody tr:hover {
         font-size: var(--font-size-2xl);
     }
 
-    .chat-launcher {
-        right: var(--space-4);
-        left: var(--space-4);
-    }
 
-    .chat-launcher input {
-        width: 100%;
-    }
-
-    .chat-panel {
-        width: 100%;
-        height: 100%;
-        max-height: none;
-        border-radius: var(--radius-xl);
-    }
 
     .summary-card .value {
         font-size: var(--font-size-2xl);

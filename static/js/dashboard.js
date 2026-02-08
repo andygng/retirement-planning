@@ -80,7 +80,23 @@ function renderDashboard() {
             ${renderSummaryCard('Gap', formatCurrency(planData.gap), planData.gap >= 0 ? 'Surplus' : 'Shortfall', planData.gap >= 0 ? 'positive' : 'negative')}
         </div>
         
-        ${renderKPICards()}
+        <div class="ai-copilot-section" id="aiCopilotSection">
+            <div class="copilot-header">
+                <h2>Summary</h2>
+            </div>
+            <div class="copilot-messages" id="chatMessages">
+                <!-- Messages go here -->
+            </div>
+            <div class="copilot-input-container">
+                <span class="copilot-status" id="chatStatus"></span>
+                <form id="chatForm">
+                    <input type="text" id="chatInput" class="copilot-input" placeholder="Ask a follow-up question..." autocomplete="off">
+                    <button type="submit" class="btn-copilot-send" id="sendChatBtn" aria-label="Send">
+                        <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"></path></svg>
+                    </button>
+                </form>
+            </div>
+        </div>
         
         <div class="charts-section">
             <div class="chart-container">
@@ -97,6 +113,8 @@ function renderDashboard() {
             </div>
         </div>
         
+        ${renderKPICards()}
+        
         <div class="commentary-section">
             <h2>Key Insights</h2>
             ${generateCommentary()}
@@ -107,6 +125,10 @@ function renderDashboard() {
 
     // Render charts
     renderCharts();
+
+    // Re-initialize chat if it was already initialized, or init relative to new DOM
+    initializeChatAssistant();
+    triggerAIAnalysis();
 }
 
 function renderSummaryCard(title, value, subtitle, valueClass = '') {
@@ -375,7 +397,7 @@ function populateEditForm() {
             </div>
             <div class="form-group">
                 <label>Withdrawal Rate (%)</label>
-                <input type="number" id="edit_withdrawal_rate" value="${inputs.withdrawal_rate ?? ''}" min="0.1" max="10" step="0.1">
+                <input type="number" id="edit_withdrawal_rate" value="${inputs.withdrawal_rate ? Number(inputs.withdrawal_rate).toFixed(2) : ''}" min="0.1" max="10" step="0.01">
             </div>
             <div class="form-group">
                 <label>Current Age</label>
@@ -393,7 +415,7 @@ function populateEditForm() {
             </div>
             <div class="form-group">
                 <label>Expected Annual Growth Rate (CAGR %)</label>
-                <input type="number" id="edit_cagr" value="${inputs.cagr ?? ''}" min="-100" max="100" step="0.1">
+                <input type="number" id="edit_cagr" value="${inputs.cagr ? Number(inputs.cagr).toFixed(2) : ''}" min="-100" max="100" step="0.01">
             </div>
             <div class="form-group">
                 <label>Monthly Savings for Retirement (${currencyLabel})</label>
@@ -557,66 +579,76 @@ function getSanitizedInputValue(id) {
 }
 
 function initializeChatAssistant() {
-    if (chatInitialized) {
-        return;
-    }
-
-    chatElements.launcherInput = document.getElementById('chatLauncherInput');
-    chatElements.overlay = document.getElementById('chatOverlay');
-    chatElements.closeBtn = document.getElementById('closeChat');
+    // Re-bind elements every time renderDashboard is called because the DOM is replaced
     chatElements.messages = document.getElementById('chatMessages');
     chatElements.form = document.getElementById('chatForm');
-    chatElements.textarea = document.getElementById('chatInput');
+    chatElements.textarea = document.getElementById('chatInput'); // It's an input now, but keeping var name
     chatElements.status = document.getElementById('chatStatus');
     chatElements.sendBtn = document.getElementById('sendChatBtn');
 
-    if (!chatElements.launcherInput || !chatElements.form || !chatElements.overlay) {
+    if (!chatElements.form || !chatElements.messages) {
         return;
     }
 
-    chatHistory = loadChatHistory();
-    renderChatMessages();
-
-    chatElements.launcherInput.addEventListener('click', openChatOverlay);
-    chatElements.launcherInput.addEventListener('focus', openChatOverlay);
-
-    if (chatElements.closeBtn) {
-        chatElements.closeBtn.addEventListener('click', closeChatOverlay);
-    }
-
-    chatElements.overlay.addEventListener('click', (event) => {
-        if (event.target === chatElements.overlay) {
-            closeChatOverlay();
-        }
-    });
+    // Unbind previous event listeners to avoid duplicates if any (though innerHTML replacement usually kills them)
+    // We'll just bind new ones.
+    chatElements.form.removeEventListener('submit', handleChatSubmit);
     chatElements.form.addEventListener('submit', handleChatSubmit);
 
-    document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape' && chatElements.overlay && chatElements.overlay.classList.contains('active')) {
-            closeChatOverlay();
-        }
-    });
-
-    chatInitialized = true;
+    // Initial message is handled by triggerAIAnalysis
+    // But if we have history that is NOT the initial analysis, we might want to keep it?
+    // For now, let's clear and re-analyze on dashboard refresh to keep context fresh with new numbers.
+    chatHistory = [];
+    // renderChatMessages(); // Will be called by triggerAIAnalysis
 }
 
-function loadChatHistory() {
-    try {
-        const stored = localStorage.getItem(CHAT_STORAGE_KEY);
-        return stored ? JSON.parse(stored) : [];
-    } catch (error) {
-        console.warn('Unable to load chat history', error);
-        return [];
-    }
+function triggerAIAnalysis() {
+    if (!chatElements.messages) return;
+
+    chatElements.messages.innerHTML = ''; // Clear previous
+    chatElements.messages.innerHTML = ''; // Clear previous
+    showTypingIndicator();
+
+    // Add a temporary "Thinking..." message or just wait for stream/response
+    // slightly different behavior than standard user chat
+
+    const analysisPrompt = "Provide a single, conversational sentence summarizing the high-level result of this retirement plan. Be extremely concise and encouraging. Avoid detailed bullet points.";
+
+    chatIsSending = true;
+    if (chatElements.sendBtn) chatElements.sendBtn.disabled = true;
+
+    fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            message: analysisPrompt,
+            plan_data: planData
+        })
+    })
+        .then(response => response.json())
+        .then(result => {
+            if (result.response) {
+                removeTypingIndicator();
+                addChatMessage('assistant', result.response);
+            } else {
+                removeTypingIndicator();
+                addChatMessage('assistant', "I couldn't analyze the plan right now. Try asking a question below.");
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            removeTypingIndicator();
+            addChatMessage('error', 'Analysis failed.');
+        })
+        .finally(() => {
+            chatIsSending = false;
+            if (chatElements.sendBtn) chatElements.sendBtn.disabled = false;
+        });
 }
 
-function saveChatHistory() {
-    try {
-        localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(chatHistory));
-    } catch (error) {
-        console.warn('Unable to save chat history', error);
-    }
-}
+
+
+
 
 function renderChatMessages() {
     if (!chatElements.messages) {
@@ -650,7 +682,7 @@ function addChatMessage(role, content) {
         content,
         timestamp: Date.now()
     });
-    saveChatHistory();
+
     renderChatMessages();
 }
 
@@ -667,7 +699,7 @@ function handleChatSubmit(event) {
 
     addChatMessage('user', message);
     chatElements.textarea.value = '';
-    setChatStatus('Thinking...');
+    showTypingIndicator();
     chatIsSending = true;
     if (chatElements.sendBtn) {
         chatElements.sendBtn.disabled = true;
@@ -685,21 +717,20 @@ function handleChatSubmit(event) {
     })
         .then(response => response.json())
         .then(result => {
+            removeTypingIndicator();
             if (result.response) {
                 addChatMessage('assistant', result.response);
-                setChatStatus('');
             } else {
                 const errorMessage = result.error || 'Something went wrong.';
                 addChatMessage('error', errorMessage);
                 if (result.details) {
                     console.warn('Chat error details:', result.details);
                 }
-                setChatStatus('Unable to get a reply.');
             }
         })
         .catch(() => {
+            removeTypingIndicator();
             addChatMessage('error', 'Network error. Please try again.');
-            setChatStatus('Unable to get a reply.');
         })
         .finally(() => {
             chatIsSending = false;
@@ -709,32 +740,40 @@ function handleChatSubmit(event) {
         });
 }
 
-function openChatOverlay() {
-    if (!chatElements.overlay) {
-        return;
-    }
-    chatElements.overlay.classList.add('active');
-    chatElements.overlay.setAttribute('aria-hidden', 'false');
-    setTimeout(() => {
-        chatElements.textarea.focus();
-    }, 0);
+
+
+
+function showTypingIndicator() {
+    if (!chatElements.messages) return;
+
+    // Check if already showing
+    if (document.getElementById('typing-indicator')) return;
+
+    const indicatorHtml = `
+        <div class="typing-indicator" id="typing-indicator">
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+            <div class="typing-dot"></div>
+        </div>
+    `;
+
+    const wrapper = document.createElement('div');
+    wrapper.style.alignSelf = 'flex-start'; // Align left
+    wrapper.innerHTML = indicatorHtml;
+    chatElements.messages.appendChild(wrapper);
+    chatElements.messages.scrollTop = chatElements.messages.scrollHeight;
 }
 
-function closeChatOverlay() {
-    if (!chatElements.overlay) {
-        return;
-    }
-    chatElements.overlay.classList.remove('active');
-    chatElements.overlay.setAttribute('aria-hidden', 'true');
-    if (chatElements.launcherInput) {
-        chatElements.launcherInput.blur();
-    }
-}
-
-function setChatStatus(text) {
-    if (chatElements.status) {
-        chatElements.status.textContent = text;
-    }
+function removeTypingIndicator() {
+    const indicators = document.querySelectorAll('#typing-indicator');
+    indicators.forEach(el => {
+        // Remove the parent wrapper we added or the element itself if direct
+        if (el.parentElement && el.parentElement.parentElement === chatElements.messages) {
+            el.parentElement.remove();
+        } else {
+            el.remove();
+        }
+    });
 }
 
 function formatChatMessage(content) {
