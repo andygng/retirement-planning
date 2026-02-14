@@ -26,7 +26,7 @@ const questions = [
     {
         id: 'withdrawal_rate',
         title: 'What withdrawal rate would you like to use?',
-        description: 'This is the percentage of your net worth you plan to withdraw annually. A common rate is 4%.',
+        description: 'This helps set the post-retirement growth assumption used in your age-100 sustainability target. We use the lower of your growth rate and withdrawal rate. A common starting point is 4%.',
         type: 'number',
         suffix: '%',
         min: 0.1,
@@ -684,9 +684,9 @@ function submitAnswers() {
             cancelDashboardTransition();
             const container = document.querySelector('.question-container');
             const errorMessage = typeof error === 'string' ? error : (error.message || 'An unknown error occurred');
-            const isPayoutAgeError = /payout/i.test(errorMessage) && /retirement age/i.test(errorMessage);
+            const isPayoutAgeError = /payout/i.test(errorMessage) && (/retirement age/i.test(errorMessage) || /age must be 100 or less/i.test(errorMessage) || /after current age/i.test(errorMessage));
             if (isPayoutAgeError) {
-                pendingErrorMessage = 'One or more payouts are scheduled after your retirement age. Please update those payout ages to be on or before your retirement age.';
+                pendingErrorMessage = 'One or more payouts have an invalid age. Please set each payout age after your current age and on or before age 100.';
                 const payoutIndex = questions.findIndex(question => question.id === 'payouts');
                 if (payoutIndex !== -1) {
                     currentQuestionIndex = payoutIndex;

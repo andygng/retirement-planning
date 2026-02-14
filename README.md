@@ -1,23 +1,24 @@
 # Retirement Planning Tool
 
-A comprehensive retirement planning web application that calculates your target net worth, tracks your progress, and provides personalized recommendations based on your financial situation.
+A retirement planning web app that calculates the retirement balance you need, projects your path to retirement, and shows how your balance behaves through age 100.
 
 ## Features
 
-- **Elegant Onboarding Flow**: Step-by-step question flow with beautiful animations
-- **Comprehensive Calculations**: 
-  - Target net worth calculation based on retirement income goals
-  - Monthly savings compounding with immediate investment
-  - One-time payout projections
-  - Canadian tax calculations
-- **Interactive Dashboard**: 
-  - Visual charts showing net worth projections
-  - Year-by-year projections table
-  - Detailed analysis and recommendations
+- **Guided onboarding flow** with simple, one-question-at-a-time inputs.
+- **Core planning calculations**:
+  - Retirement target based on sustaining your spending from retirement to age 100
+  - Target-income withdrawals in retirement (after-tax goal converted to required pre-tax cash flow)
+  - Post-retirement growth assumption uses `min(CAGR, withdrawal_rate)` for a conservative cap
+  - Monthly compounding for existing assets, savings, and one-time payouts
+  - Canadian tax calculations (federal + Ontario)
+- **Interactive dashboard**:
+  - Net worth chart through age 100 with retirement marker
+  - Gap at retirement against the age-100 sustainability target
+  - Sustainable spending insight (max monthly after-tax income at retirement)
 - **AI Plan Copilot**:
   - Distinct user and assistant chat bubbles for easier scanning
-  - Short, plain-language responses focused on key takeaways
-- **Edit & Recalculate**: Modify inputs and see updated results in real-time
+  - Short, plain-language responses with a brief takeaway, simple bullets, and bold key figures for readability
+- **Edit and recalculate** without restarting onboarding.
 
 ## Setup
 
@@ -31,32 +32,29 @@ pip install -r requirements.txt
 python app.py
 ```
 
-3. Open your browser and navigate to:
-```
+3. Open your browser:
+```text
 http://localhost:5001
 ```
 
 ## Usage
 
-1. **Onboarding**: Answer the questions one at a time:
-   - Goals & Ambitions (retirement income, age, withdrawal rate)
-   - Current Information (age, income, assets, savings, etc.)
-   - One-time payouts (inheritances, equity payouts)
-
-2. **Dashboard**: Review your retirement plan:
-   - Summary cards with key metrics
-   - Interactive charts showing projections
-   - Detailed year-by-year breakdown
-   - Actionable recommendations
-
-3. **Edit Inputs**: Click "Edit Inputs" to modify any parameter and recalculate
+1. **Onboarding**: Enter your retirement income goal, retirement age, withdrawal-rate assumption, current assets, growth assumption, monthly savings, and optional one-time payouts.
+2. **Dashboard**: Review retirement readiness at retirement age, projected balance through age 100, and sustainable spending.
+3. **Edit Inputs**: Use **Edit Inputs** to change assumptions and instantly recalculate.
 
 ## Technical Details
 
-- **Backend**: Python Flask
-- **Frontend**: HTML/CSS/JavaScript with Chart.js
-- **Tax Calculator**: Canadian federal and provincial tax brackets (2024)
-- **Calculations**: Monthly compounding for all investments and savings
+- **Backend**: Python + Flask
+- **Frontend**: HTML/CSS/JavaScript + Chart.js
+- **Tax model**: Canadian 2024 federal + Ontario brackets
+- **Projection horizon**: fixed at age 100
+- **`/api/calculate` fields include**:
+  - `projection_end_age`
+  - `net_worth_at_projection_end`
+  - `depletion_age` (first age where balance drops below 0, or `null`)
+  - `post_retirement_growth_rate`
+  - `max_sustainable_monthly_income`
 
 ## Mobile Support Policy
 
@@ -67,6 +65,8 @@ http://localhost:5001
 
 ## Notes
 
-- All calculations assume monthly compounding
-- Tax rates are based on 2024 Canadian tax brackets (Ontario provincial rates)
-- The tool provides projections and should not be considered as financial advice
+- Values are nominal (no inflation adjustment).
+- Pre-retirement growth uses the input CAGR.
+- Post-retirement growth uses `min(CAGR, withdrawal_rate)`.
+- Payouts are allowed after retirement, up to age 100.
+- The tool provides projections and is not financial advice.

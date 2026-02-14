@@ -111,17 +111,21 @@ def chat():
         system_prompt = (
             "You are a retirement planning assistant for a non-technical user. "
             "Use the provided plan data for every answer when possible. "
-            "Default response length: 2-4 short sentences, under 100 words, unless the user asks for more detail. "
+            "Default response length: 4-7 short lines, usually under 120 words, unless the user asks for more detail. "
             "Use plain language and a calm tone. "
+            "Make responses easy to scan: avoid one long paragraph. "
+            "Use this structure by default: one short takeaway line, then 2-4 bullets starting with '- '. "
+            "Use bold for key figures or labels when helpful (example: **$2,300/month**). "
+            "Keep each bullet to one short sentence. "
             "No markdown headings, no hash symbols, no tables, and no code blocks. "
-            "If formatting helps, use at most 3 simple bullets starting with '- '. "
             "If a recalculation is requested, provide the key final numbers with a short explanation of trade-offs."
         )
         plan_context = json.dumps(plan_data, default=str) if plan_data else "No plan data supplied."
         user_prompt = (
             f"User question: {message}\n\n"
             f"Current retirement plan data (JSON): {plan_context}\n\n"
-            "Answer directly. Mention trade-offs briefly and reference exact figures when available."
+            "Answer directly. Mention trade-offs briefly and reference exact figures when available. "
+            "Format for readability with a short takeaway and simple bullets when there are multiple points."
         )
         
         completion = client.chat.completions.create(

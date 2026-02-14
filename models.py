@@ -1,8 +1,9 @@
 from typing import List, Dict, Any
 
+
 class RetirementInputs:
     """Data model for retirement planning inputs"""
-    
+
     def __init__(
         self,
         ideal_retirement_income: float,
@@ -22,7 +23,7 @@ class RetirementInputs:
         self.cagr = cagr
         self.monthly_savings = monthly_savings
         self.payouts = payouts  # List of {'amount': float, 'year': int}
-    
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'RetirementInputs':
         """Create RetirementInputs from dictionary"""
@@ -36,7 +37,7 @@ class RetirementInputs:
             monthly_savings=float(data['monthly_savings']),
             payouts=data.get('payouts', [])
         )
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
         return {
@@ -50,10 +51,11 @@ class RetirementInputs:
             'payouts': self.payouts
         }
 
+
 def validate_inputs(data: Dict[str, Any]) -> List[str]:
     """Validate input data and return list of errors"""
     errors = []
-    
+
     required_fields = [
         'ideal_retirement_income',
         'ideal_retirement_age',
@@ -63,15 +65,14 @@ def validate_inputs(data: Dict[str, Any]) -> List[str]:
         'cagr',
         'monthly_savings',
     ]
-    
+
     for field in required_fields:
         if field not in data:
             errors.append(f"Missing required field: {field}")
-    
+
     if errors:
         return errors
-    
-    # Validate numeric values
+
     try:
         ideal_retirement_income = float(data['ideal_retirement_income'])
         ideal_retirement_age = int(data['ideal_retirement_age'])
@@ -80,23 +81,26 @@ def validate_inputs(data: Dict[str, Any]) -> List[str]:
         current_asset_values = float(data['current_asset_values'])
         cagr = float(data['cagr'])
         monthly_savings = float(data['monthly_savings'])
-        
+
         if ideal_retirement_income <= 0:
             errors.append("Ideal retirement income must be positive")
-        if ideal_retirement_age <= current_age:
-            errors.append("Ideal retirement age must be greater than current age")
-        if withdrawal_rate <= 0 or withdrawal_rate > 100:
-            errors.append("Withdrawal rate must be between 0 and 100")
         if current_age < 0:
             errors.append("Current age must be non-negative")
+        if current_age >= 100:
+            errors.append("Current age must be less than 100")
+        if ideal_retirement_age <= current_age:
+            errors.append("Ideal retirement age must be greater than current age")
+        if ideal_retirement_age > 100:
+            errors.append("Ideal retirement age must be 100 or less")
+        if withdrawal_rate <= 0 or withdrawal_rate > 100:
+            errors.append("Withdrawal rate must be between 0 and 100")
         if current_asset_values < 0:
             errors.append("Current asset values must be non-negative")
         if cagr < -100 or cagr > 100:
             errors.append("CAGR must be between -100 and 100")
         if monthly_savings < 0:
             errors.append("Monthly savings must be non-negative")
-        
-        # Validate payouts if provided
+
         if 'payouts' in data:
             payouts = data['payouts']
             if not isinstance(payouts, list):
@@ -104,19 +108,19 @@ def validate_inputs(data: Dict[str, Any]) -> List[str]:
             else:
                 for i, payout in enumerate(payouts):
                     if not isinstance(payout, dict):
-                        errors.append(f"Payout {i+1} must be a dictionary")
+                        errors.append(f"Payout {i + 1} must be a dictionary")
                     elif 'amount' not in payout or 'year' not in payout:
-                        errors.append(f"Payout {i+1} must have 'amount' and 'year' fields")
+                        errors.append(f"Payout {i + 1} must have 'amount' and 'year' fields")
                     else:
                         if float(payout['amount']) < 0:
-                            errors.append(f"Payout {i+1} amount must be non-negative")
+                            errors.append(f"Payout {i + 1} amount must be non-negative")
                         payout_age = int(payout['year'])  # 'year' field stores the age
                         if payout_age <= current_age:
-                            errors.append(f"Payout {i+1} age must be after current age")
-                        if payout_age > ideal_retirement_age:
-                            errors.append(f"Payout {i+1} age must be on or before ideal retirement age")
-    
+                            errors.append(f"Payout {i + 1} age must be after current age")
+                        if payout_age > 100:
+                            errors.append(f"Payout {i + 1} age must be 100 or less")
+
     except (ValueError, TypeError) as e:
         errors.append(f"Invalid numeric value: {str(e)}")
-    
+
     return errors

@@ -76,8 +76,8 @@ function renderDashboard() {
 
     let html = `
         <div class="summary-cards">
-            ${renderSummaryCard('Target Net Worth', formatCurrency(planData.target_net_worth), 'Required at retirement')}
-            ${renderSummaryCard('Projected Net Worth', formatCurrency(planData.total_projected_net_worth), `In ${planData.years_until_retirement} years`)}
+            ${renderSummaryCard('Target Net Worth', formatCurrency(planData.target_net_worth), 'Required at retirement to fund spending through age 100')}
+            ${renderSummaryCard('Projected Net Worth', formatCurrency(planData.total_projected_net_worth), "At retirement")}
             ${renderSummaryCard('Gap', formatCurrency(planData.gap), planData.gap >= 0 ? 'Surplus' : 'Shortfall', planData.gap >= 0 ? 'positive' : 'negative')}
         </div>
         
@@ -101,7 +101,7 @@ function renderDashboard() {
         
         <div class="charts-section">
             <div class="chart-container">
-                <h2>Net Worth Projection</h2>
+                <h2>Net Worth Projection to Age 100</h2>
                 <div class="chart-wrapper">
                     <canvas id="netWorthChart"></canvas>
                 </div>
@@ -227,6 +227,47 @@ function observeDonutLegendContainer(chart) {
     donutLegendResizeObserver.observe(container);
 }
 
+const retirementMarkerPlugin = {
+    id: 'retirementMarker',
+    afterDatasetsDraw(chart) {
+        const retirementAge = planData && planData.inputs ? Number(planData.inputs.ideal_retirement_age) : NaN;
+        if (!Number.isFinite(retirementAge)) {
+            return;
+        }
+
+        const labels = chart.data && chart.data.labels ? chart.data.labels : [];
+        const index = labels.findIndex(label => Number(label) === retirementAge);
+        if (index === -1) {
+            return;
+        }
+
+        const xScale = chart.scales && chart.scales.x;
+        const yScale = chart.scales && chart.scales.y;
+        if (!xScale || !yScale) {
+            return;
+        }
+
+        const x = xScale.getPixelForValue(index);
+        const ctx = chart.ctx;
+
+        ctx.save();
+        ctx.strokeStyle = 'rgba(15, 23, 42, 0.5)';
+        ctx.setLineDash([4, 4]);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x, yScale.top);
+        ctx.lineTo(x, yScale.bottom);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.7)';
+        ctx.font = "11px 'Space Grotesk', sans-serif";
+        ctx.textAlign = 'center';
+        ctx.fillText('Retirement (' + retirementAge + ')', x, yScale.top + 12);
+        ctx.restore();
+    }
+};
+
 function renderCharts() {
     if (donutLegendResizeObserver) {
         donutLegendResizeObserver.disconnect();
@@ -248,6 +289,7 @@ function renderCharts() {
     }
     charts.netWorth = new Chart(netWorthCtx, {
         type: 'line',
+        plugins: [retirementMarkerPlugin],
         data: {
             labels: years,
             datasets: [
@@ -301,7 +343,7 @@ function renderCharts() {
             },
             scales: {
                 y: {
-                    beginAtZero: true,
+                    beginAtZero: false,
                     grid: {
                         borderDash: [2, 4],
                         color: 'rgba(0, 0, 0, 0.05)'
@@ -392,6 +434,8 @@ function generateCommentary() {
     const gap = planData.gap;
     const isSurplus = gap >= 0;
     const monthlyGap = planData.required_monthly_savings - planData.current_monthly_savings;
+    const sustainableMonthly = Number(planData.max_sustainable_monthly_income || 0);
+    const postRetGrowthRate = Number((planData.post_retirement_growth_rate ?? planData.inputs.withdrawal_rate) || 0);
 
     let html = `
         <div class="insights-grid">
@@ -399,8 +443,8 @@ function generateCommentary() {
                 <h3>📉 The Bottom Line</h3>
                 <p>
                     ${isSurplus
-            ? `You are projected to have <strong>${formatCurrency(Math.abs(gap))} surplus</strong> above your target.`
-            : `You have a projected shortfall of <strong>${formatCurrency(Math.abs(gap))}</strong>.`}
+            ? `You are projected to have <strong>${formatCurrency(Math.abs(gap))} surplus</strong> above the retirement amount needed to fund spending through age 100.`
+            : `You have a projected shortfall of <strong>${formatCurrency(Math.abs(gap))}</strong> at retirement against your age-100 spending target.`}
                 </p>
             </div>
             
@@ -408,7 +452,7 @@ function generateCommentary() {
                 <h3>💡 Recommendation</h3>
                 <p>
                     ${isSurplus
-            ? "Consider retiring earlier or increasing your lifestyle budget."
+            ? `You could potentially spend up to <strong>${formatCurrency(sustainableMonthly)}</strong> per month after tax and still target age 100.`
             : `Try to increase monthly savings by <strong>${formatCurrency(monthlyGap)}</strong> or retire ${Math.ceil(monthlyGap / 1000)} years later.`}
                 </p>
             </div>
@@ -416,7 +460,7 @@ function generateCommentary() {
             <div class="insight-item">
                 <h3>🔧 Key Assumptions</h3>
                 <p class="compact-text">
-                    ${Number(planData.inputs.cagr).toFixed(1)}% Growth • ${Number(planData.inputs.withdrawal_rate).toFixed(1)}% Withdrawal Rate
+                    ${Number(planData.inputs.cagr).toFixed(1)}% Pre-retirement Growth • ${postRetGrowthRate.toFixed(1)}% Post-retirement Growth (capped by withdrawal rate)
                 </p>
             </div>
         </div>
@@ -1067,10 +1111,13 @@ function convertPlanData(sourcePlan, rate) {
         'projected_savings',
         'projected_payouts',
         'total_projected_net_worth',
+        'net_worth_at_projection_end',
         'gap',
         'required_monthly_savings',
         'current_monthly_savings',
-        'pre_tax_retirement_income'
+        'pre_tax_retirement_income',
+        'max_sustainable_monthly_income',
+        'max_sustainable_pre_tax_monthly_income'
     ], safeRate);
 
     if (Array.isArray(converted.year_by_year)) {
